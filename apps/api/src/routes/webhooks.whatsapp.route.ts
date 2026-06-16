@@ -1,8 +1,12 @@
 import { Router } from "express";
 import { z } from "zod";
 
-import { parseWhatsAppInboundMessages, verifyWhatsAppSignature } from "../integrations/whatsapp";
-import type { InboundMessageQueue } from "../jobs";
+import {
+  parseWhatsAppInboundMessages,
+  parseWhatsAppStatusEvents,
+  verifyWhatsAppSignature,
+} from "../integrations/whatsapp";
+import type { InboundMessageQueue, WhatsAppStatusProcessor } from "../jobs";
 import { asyncHandler } from "../middleware";
 import { AppError } from "../utils";
 
@@ -14,6 +18,7 @@ const HandshakeQuerySchema = z.object({
 
 export interface WhatsAppWebhookRouterOptions {
   getQueue: () => InboundMessageQueue;
+  getStatusProcessor: () => WhatsAppStatusProcessor;
   verifyToken?: string;
   appSecret?: string;
 }
@@ -49,8 +54,12 @@ export function createWhatsAppWebhookRouter(options: WhatsAppWebhookRouterOption
       );
 
       const events = parseWhatsAppInboundMessages(request.body);
+      const statusEvents = parseWhatsAppStatusEvents(request.body);
 
       options.getQueue().enqueue(events);
+      for (const event of statusEvents) {
+        void options.getStatusProcessor().process(event);
+      }
       response.status(200).json({ received: true });
     }),
   );

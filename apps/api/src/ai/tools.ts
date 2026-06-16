@@ -217,13 +217,23 @@ export function createAiToolHandlers(context: AiToolHandlerContext): Record<stri
           },
           context.createdBy,
         );
+        const confirmation = await context.services.conversations.sendBookingConfirmation(
+          context.tenantId,
+          context.conversation.id,
+          appointment.id,
+        );
 
         return {
           ok: true,
-          content: { ok: true, appointmentId: appointment.id },
+          content: {
+            ok: true,
+            appointmentId: appointment.id,
+            confirmationStatus: confirmation.status,
+          },
           contextPatch: {
             appointmentId: appointment.id,
             patientName: args.patientName,
+            confirmationMessageId: confirmation.messageId,
           },
           state: "booked",
         };

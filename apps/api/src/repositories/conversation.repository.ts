@@ -98,4 +98,34 @@ export class ConversationRepository extends TenantCollectionRepository<Conversat
       .doc(messageId)
       .update(data);
   }
+
+  async findMessageByWaMessageId(
+    tenantId: string,
+    waMessageId: string,
+  ): Promise<(RepositoryDocument<Message> & { conversationId: string }) | null> {
+    const snapshot = await this.db
+      .collectionGroup("messages")
+      .where("waMessageId", "==", waMessageId)
+      .limit(10)
+      .get();
+
+    for (const doc of snapshot.docs) {
+      const messagesCollection = doc.ref.parent;
+      const conversationRef = messagesCollection.parent;
+      const conversationsCollection = conversationRef?.parent;
+      const tenantRef = conversationsCollection?.parent;
+
+      if (tenantRef?.id !== tenantId || !conversationRef) {
+        continue;
+      }
+
+      return {
+        id: doc.id,
+        conversationId: conversationRef.id,
+        data: doc.data() as Message,
+      };
+    }
+
+    return null;
+  }
 }

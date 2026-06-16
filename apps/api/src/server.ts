@@ -2,7 +2,7 @@ import express from "express";
 import helmet from "helmet";
 
 import { getDb } from "./integrations/firebase";
-import { InboundMessageProcessor, InboundMessageQueue } from "./jobs";
+import { InboundMessageProcessor, InboundMessageQueue, WhatsAppStatusProcessor } from "./jobs";
 import { errorHandler, requestContext, type TokenVerifier } from "./middleware";
 import { createLazyDomainServicesProvider } from "./services";
 import { createAppointmentRouter } from "./routes/appointment.route";
@@ -18,6 +18,7 @@ import { createWhatsAppWebhookRouter } from "./routes/webhooks.whatsapp.route";
 export interface ServerOptions {
   tokenVerifier?: TokenVerifier;
   whatsappQueue?: InboundMessageQueue;
+  whatsappStatusProcessor?: WhatsAppStatusProcessor;
   whatsappAppSecret?: string;
   whatsappVerifyToken?: string;
 }
@@ -26,9 +27,14 @@ export function createServer(options: ServerOptions = {}) {
   const app = express();
   const getServices = createLazyDomainServicesProvider();
   let whatsappQueue = options.whatsappQueue;
+  let whatsappStatusProcessor = options.whatsappStatusProcessor;
   const getWhatsAppQueue = () => {
     whatsappQueue ??= new InboundMessageQueue(new InboundMessageProcessor(getDb()));
     return whatsappQueue;
+  };
+  const getWhatsAppStatusProcessor = () => {
+    whatsappStatusProcessor ??= new WhatsAppStatusProcessor(getDb());
+    return whatsappStatusProcessor;
   };
 
   app.use(requestContext);
@@ -45,6 +51,7 @@ export function createServer(options: ServerOptions = {}) {
     "/api/webhooks/whatsapp",
     createWhatsAppWebhookRouter({
       getQueue: getWhatsAppQueue,
+      getStatusProcessor: getWhatsAppStatusProcessor,
       appSecret: options.whatsappAppSecret ?? process.env.WHATSAPP_APP_SECRET,
       verifyToken: options.whatsappVerifyToken ?? process.env.WHATSAPP_VERIFY_TOKEN,
     }),

@@ -12,6 +12,9 @@
   },
   "dependencies": {
     "@clinic-ai/shared": "workspace:*",
+    "@tanstack/react-query": "^5.101.0",
+    "firebase": "^12.14.0",
+    "lucide-react": "^1.18.0",
     "next": "^15.3.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { AuthProvider } from "../lib/auth/AuthProvider";
+import { QueryProvider } from "../lib/query";
 import "../styles/globals.css";
 
 export const metadata: Metadata = {
   title: "Clinic AI Receptionist",
-  description: "Placeholder dashboard shell for Clinic AI Receptionist.",
+  description: "Clinic AI Receptionist dashboard.",
 };
 
 type RootLayoutProps = {
@@ -15,7 +17,11 @@ type RootLayoutProps = {
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <QueryProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </QueryProvider>
+      </body>
     </html>
   );
 }

@@ -4,13 +4,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: [
-      "**/dist/**",
-      "**/.next/**",
-      "**/node_modules/**",
-      "coverage/**",
-      "next-env.d.ts"
-    ]
+    ignores: ["**/dist/**", "**/.next/**", "**/node_modules/**", "coverage/**", "**/next-env.d.ts"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
@@ -18,12 +12,12 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: true,
-        tsconfigRootDir: import.meta.dirname
-      }
+        tsconfigRootDir: import.meta.dirname,
+      },
     },
     rules: {
-      "@typescript-eslint/no-explicit-any": "error"
-    }
+      "@typescript-eslint/no-explicit-any": "error",
+    },
   },
-  prettier
+  prettier,
 );

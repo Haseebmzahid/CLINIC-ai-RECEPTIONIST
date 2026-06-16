@@ -119,7 +119,7 @@ Current protected dashboard endpoints require `Authorization: Bearer <Firebase I
 
 ## Current Scope
 
-Prompt 6 is implemented: WhatsApp inbound webhook verification, fast async queue processing, tenant resolution by `phone_number_id`, idempotent patient/conversation/message persistence, availability generation, transactional double-booking-safe appointments, Firebase token verification, request context, tenant context, RBAC helpers, standard error envelope, `/api/me`, services/settings/FAQ/patient CRUD, custom-claims utility, tenant-scoped repositories, Firestore rules/indexes, deterministic seed data, and emulator-oriented repository tests.
+Prompt 7 is implemented: AI prompt assembly, OpenAI tool schemas/handlers, conversation context and FSM updates, guardrails for medical advice/escalation/prompt secrecy, mocked OpenAI tests, WhatsApp inbound webhook verification, fast async queue processing, tenant resolution by `phone_number_id`, idempotent patient/conversation/message persistence, availability generation, transactional double-booking-safe appointments, Firebase token verification, request context, tenant context, RBAC helpers, standard error envelope, `/api/me`, services/settings/FAQ/patient CRUD, custom-claims utility, tenant-scoped repositories, Firestore rules/indexes, deterministic seed data, and emulator-oriented repository tests.
 
 ## Local WhatsApp Webhook Testing
 

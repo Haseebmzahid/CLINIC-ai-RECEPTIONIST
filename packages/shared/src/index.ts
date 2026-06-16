@@ -36,11 +36,14 @@ export const AppointmentSourceSchema = z.enum(["whatsapp", "dashboard"]);
 export const ConversationStateSchema = z.enum([
   "new",
   "greeting",
+  "browsing",
   "faq",
+  "collecting",
   "collecting_info",
   "scheduling",
   "confirming",
   "confirmed",
+  "booked",
   "handoff",
   "closed",
 ]);

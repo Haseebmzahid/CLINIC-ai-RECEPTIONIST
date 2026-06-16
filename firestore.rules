@@ -1,0 +1,28 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isTenantStaff(tid) {
+      return request.auth != null
+        && request.auth.token.tenantId == tid
+        && request.auth.token.role in ['owner', 'staff'];
+    }
+
+    function isPlatformAdmin() {
+      return request.auth != null
+        && request.auth.token.role == 'platform_admin';
+    }
+
+    match /tenants/{tid} {
+      allow read, write: if isTenantStaff(tid) || isPlatformAdmin();
+
+      match /{document=**} {
+        allow read, write: if isTenantStaff(tid) || isPlatformAdmin();
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

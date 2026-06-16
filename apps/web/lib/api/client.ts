@@ -77,12 +77,33 @@ export const ConversationSummarySchema = z.object({
   updatedAt: z.string(),
 });
 
+export const ConversationMessageSchema = z.object({
+  id: z.string(),
+  direction: z.enum(["in", "out"]),
+  channel: z.literal("whatsapp"),
+  waMessageId: z.string().optional(),
+  type: z.enum(["text", "interactive", "image", "system"]),
+  text: z.string(),
+  author: z.enum(["patient", "ai", "staff", "system"]),
+  status: z.enum(["received", "sent", "delivered", "read", "failed"]),
+  createdAt: z.string(),
+});
+
+export const SendConversationMessageResultSchema = z.object({
+  messageId: z.string(),
+  waMessageId: z.string().optional(),
+  status: z.enum(["sent", "failed"]),
+  usedTemplate: z.boolean(),
+});
+
 export type Appointment = z.infer<typeof AppointmentSchema>;
 export type AppointmentStatus = z.infer<typeof AppointmentStatusSchema>;
 export type AvailabilitySlot = z.infer<typeof AvailabilitySlotSchema>;
 export type Patient = z.infer<typeof PatientSchema>;
 export type Service = z.infer<typeof ServiceSchema>;
 export type ConversationSummary = z.infer<typeof ConversationSummarySchema>;
+export type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
+export type SendConversationMessageResult = z.infer<typeof SendConversationMessageResultSchema>;
 
 export interface AppointmentListParams {
   from: string;
@@ -113,6 +134,10 @@ export interface UpdateAppointmentInput {
   status?: AppointmentStatus;
 }
 
+export interface ConversationListParams {
+  state?: string;
+}
+
 export class ApiClientError extends Error {
   constructor(
     public readonly code: string,
@@ -137,9 +162,48 @@ const mockService: Service = {
 };
 const mockStore: {
   appointments: Appointment[];
+  conversations: ConversationSummary[];
+  messages: Record<string, ConversationMessage[]>;
   patients: Patient[];
 } = {
   appointments: [],
+  conversations: [
+    {
+      id: "conv_e2e",
+      patientId: "pat_e2e_thread",
+      waId: "15550111",
+      state: "handoff",
+      aiPaused: false,
+      needsHuman: true,
+      updatedAt: new Date().toISOString(),
+    },
+  ],
+  messages: {
+    conv_e2e: [
+      {
+        id: "msg_e2e_1",
+        direction: "in",
+        channel: "whatsapp",
+        waMessageId: "wamid.e2e.1",
+        type: "text",
+        text: "Hi, I need help with my appointment.",
+        author: "patient",
+        status: "received",
+        createdAt: new Date(Date.now() - 120_000).toISOString(),
+      },
+      {
+        id: "msg_e2e_2",
+        direction: "out",
+        channel: "whatsapp",
+        waMessageId: "wamid.e2e.2",
+        type: "system",
+        text: "Staff notification: AI marked this conversation for staff review.",
+        author: "system",
+        status: "sent",
+        createdAt: new Date(Date.now() - 60_000).toISOString(),
+      },
+    ],
+  },
   patients: [],
 };
 
@@ -372,12 +436,112 @@ export class ApiClient {
     });
   }
 
-  async listConversations(): Promise<ConversationSummary[]> {
+  async listConversations(params: ConversationListParams = {}): Promise<ConversationSummary[]> {
     if (isE2eApiMock) {
-      return [];
+      return mockStore.conversations.filter(
+        (conversation) => !params.state || conversation.state === params.state,
+      );
     }
 
-    return this.request("/api/conversations", z.array(ConversationSummarySchema));
+    const search = new URLSearchParams();
+
+    if (params.state) {
+      search.set("state", params.state);
+    }
+
+    const suffix = search.toString() ? `?${search.toString()}` : "";
+    return this.request(`/api/conversations${suffix}`, z.array(ConversationSummarySchema));
+  }
+
+  async listConversationMessages(conversationId: string): Promise<ConversationMessage[]> {
+    if (isE2eApiMock) {
+      return mockStore.messages[conversationId] ?? [];
+    }
+
+    return this.request(
+      `/api/conversations/${conversationId}/messages`,
+      z.array(ConversationMessageSchema),
+    );
+  }
+
+  async sendConversationMessage(
+    conversationId: string,
+    text: string,
+  ): Promise<SendConversationMessageResult> {
+    if (isE2eApiMock) {
+      const id = `msg_e2e_${(mockStore.messages[conversationId] ?? []).length + 1}`;
+      const now = mockTimestamp();
+      const message: ConversationMessage = {
+        id,
+        direction: "out",
+        channel: "whatsapp",
+        waMessageId: `wamid.e2e.staff.${id}`,
+        type: "text",
+        text,
+        author: "staff",
+        status: "sent",
+        createdAt: now,
+      };
+
+      mockStore.messages[conversationId] = [...(mockStore.messages[conversationId] ?? []), message];
+      mockStore.conversations = mockStore.conversations.map((conversation) =>
+        conversation.id === conversationId
+          ? { ...conversation, needsHuman: true, updatedAt: now }
+          : conversation,
+      );
+
+      return {
+        messageId: id,
+        waMessageId: message.waMessageId,
+        status: "sent",
+        usedTemplate: false,
+      };
+    }
+
+    return this.request(
+      `/api/conversations/${conversationId}/messages`,
+      SendConversationMessageResultSchema,
+      {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      },
+    );
+  }
+
+  async updateConversation(
+    conversationId: string,
+    input: { aiPaused: boolean },
+  ): Promise<ConversationSummary> {
+    if (isE2eApiMock) {
+      const now = mockTimestamp();
+      const updated = mockStore.conversations.map((conversation) => {
+        if (conversation.id !== conversationId) {
+          return conversation;
+        }
+
+        return {
+          ...conversation,
+          state: input.aiPaused ? "handoff" : "browsing",
+          aiPaused: input.aiPaused,
+          needsHuman: input.aiPaused,
+          updatedAt: now,
+        };
+      });
+
+      mockStore.conversations = updated;
+      const conversation = updated.find((item) => item.id === conversationId);
+
+      if (!conversation) {
+        throw new ApiClientError("NOT_FOUND", "Conversation not found.");
+      }
+
+      return conversation;
+    }
+
+    return this.request(`/api/conversations/${conversationId}`, ConversationSummarySchema, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
   }
 
   private async request<T>(

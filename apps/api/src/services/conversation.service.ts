@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { Message, Tenant } from "@clinic-ai/shared";
+import type { Conversation, Message, Tenant } from "@clinic-ai/shared";
 import { Timestamp } from "firebase-admin/firestore";
 
 import type { RepositoryDocument } from "../repositories";
@@ -35,6 +35,18 @@ export interface SendConversationTextResult {
   waMessageId?: string;
   status: "sent" | "failed";
   usedTemplate: boolean;
+}
+
+export interface ConversationMessageDto {
+  id: string;
+  direction: Message["direction"];
+  channel: Message["channel"];
+  waMessageId?: string;
+  type: Message["type"];
+  text: string;
+  author: Message["author"];
+  status: Message["status"];
+  createdAt: Timestamp;
 }
 
 export interface ConversationSummary {
@@ -74,8 +86,13 @@ export class ConversationService {
     private readonly clock: () => Date = () => new Date(),
   ) {}
 
-  async listSummaries(tenantId: string): Promise<ConversationSummary[]> {
-    const conversations = await this.conversations.list(tenantId, 100);
+  async listSummaries(
+    tenantId: string,
+    state?: Conversation["state"],
+  ): Promise<ConversationSummary[]> {
+    const conversations = (await this.conversations.listRecent(tenantId, 100)).filter(
+      (conversation) => !state || conversation.data.state === state,
+    );
 
     return conversations.map((conversation) => ({
       id: conversation.id,
@@ -88,10 +105,65 @@ export class ConversationService {
     }));
   }
 
+  async listMessages(tenantId: string, conversationId: string): Promise<ConversationMessageDto[]> {
+    const conversation = await this.conversations.getById(tenantId, conversationId);
+
+    if (!conversation) {
+      throw new AppError("NOT_FOUND", 404, "Conversation was not found.");
+    }
+
+    const messages = await this.conversations.listMessages(tenantId, conversationId);
+
+    return messages.map((message) => ({
+      id: message.id,
+      ...message.data,
+    }));
+  }
+
+  async updateAiPaused(
+    tenantId: string,
+    conversationId: string,
+    aiPaused: boolean,
+  ): Promise<ConversationSummary> {
+    const existing = await this.conversations.getById(tenantId, conversationId);
+
+    if (!existing) {
+      throw new AppError("NOT_FOUND", 404, "Conversation was not found.");
+    }
+
+    const now = Timestamp.fromDate(this.clock());
+
+    await this.conversations.update(tenantId, conversationId, {
+      aiPaused,
+      needsHuman: aiPaused ? true : false,
+      state: aiPaused
+        ? "handoff"
+        : existing.data.state === "handoff"
+          ? "browsing"
+          : existing.data.state,
+      updatedAt: now,
+    });
+
+    return {
+      id: conversationId,
+      patientId: existing.data.patientId,
+      waId: existing.data.waId,
+      state: aiPaused
+        ? "handoff"
+        : existing.data.state === "handoff"
+          ? "browsing"
+          : existing.data.state,
+      aiPaused,
+      needsHuman: aiPaused,
+      updatedAt: now,
+    };
+  }
+
   async sendConversationText(
     tenantId: string,
     conversationId: string,
     body: string,
+    author: Message["author"] = "ai",
   ): Promise<SendConversationTextResult> {
     const [tenant, conversation] = await Promise.all([
       this.tenants.getById(tenantId),
@@ -113,12 +185,13 @@ export class ConversationService {
       channel: "whatsapp",
       type: "text",
       text: body,
-      author: "ai",
+      author,
       status: "sent",
       createdAt: now,
     };
 
     await this.conversations.createMessage(tenantId, conversationId, id, outboundMessage);
+    await this.conversations.update(tenantId, conversationId, { updatedAt: now });
 
     const shouldUseTemplate = !isWithinCustomerServiceWindow(
       conversation.data.lastInboundAt,
@@ -161,6 +234,14 @@ export class ConversationService {
         usedTemplate: shouldUseTemplate,
       };
     }
+  }
+
+  async sendStaffConversationText(
+    tenantId: string,
+    conversationId: string,
+    body: string,
+  ): Promise<SendConversationTextResult> {
+    return this.sendConversationText(tenantId, conversationId, body, "staff");
   }
 
   async sendBookingConfirmation(

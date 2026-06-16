@@ -292,6 +292,24 @@ export const AppointmentListQuerySchema = z.object({
 
 export type AppointmentListQuery = z.infer<typeof AppointmentListQuerySchema>;
 
+export const ConversationListQuerySchema = z.object({
+  state: ConversationStateSchema.optional(),
+});
+
+export type ConversationListQuery = z.infer<typeof ConversationListQuerySchema>;
+
+export const UpdateConversationDtoSchema = z.object({
+  aiPaused: z.boolean(),
+});
+
+export type UpdateConversationDto = z.infer<typeof UpdateConversationDtoSchema>;
+
+export const CreateConversationMessageDtoSchema = z.object({
+  text: z.string().trim().min(1).max(2000),
+});
+
+export type CreateConversationMessageDto = z.infer<typeof CreateConversationMessageDtoSchema>;
+
 export const CreateAppointmentDtoSchema = z.object({
   serviceId: z.string().min(1),
   startsAt: z.string().datetime({ offset: true }),

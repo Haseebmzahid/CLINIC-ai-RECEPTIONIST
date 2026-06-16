@@ -30,6 +30,32 @@ export class ConversationRepository extends TenantCollectionRepository<Conversat
     );
   }
 
+  async findByStates(
+    tenantId: string,
+    states: ConversationState[],
+    limit = 100,
+  ): Promise<Array<RepositoryDocument<Conversation>>> {
+    if (states.length === 0) {
+      return [];
+    }
+
+    return this.getQueryResults(
+      this.collection(tenantId)
+        .where("state", "in", states)
+        .orderBy("updatedAt", "desc")
+        .limit(limit),
+    );
+  }
+
+  async listRecent(
+    tenantId: string,
+    limit = 100,
+  ): Promise<Array<RepositoryDocument<Conversation>>> {
+    return this.getQueryResults(
+      this.collection(tenantId).orderBy("updatedAt", "desc").limit(limit),
+    );
+  }
+
   async findByWaId(
     tenantId: string,
     waId: string,

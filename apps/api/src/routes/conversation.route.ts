@@ -19,6 +19,9 @@ export function createConversationRouter(
 
   router.use(requireAuth(verifier), requireTenantContext, requireRole("owner", "staff"));
   router.get("/", asyncHandler(controller.list));
+  router.get("/:id/messages", asyncHandler(controller.messages));
+  router.post("/:id/messages", asyncHandler(controller.sendMessage));
+  router.patch("/:id", asyncHandler(controller.update));
 
   return router;
 }

@@ -461,4 +461,61 @@ describe.skipIf(!shouldRunEmulatorTests)("conversation E2E", () => {
       ),
     ).toBe(true);
   });
+
+  it("lets staff take over, send a manual WhatsApp reply, and resume AI", async () => {
+    const db = getDb();
+    const tenantId = `clinic_${runId}_takeover`;
+    const phoneNumberId = `phone_${runId}_takeover`;
+    const graph = new MockGraphClient();
+    const aiClient = new ConversationScriptAiClient();
+    const services = buildServices(db, graph);
+    const processor = new InboundMessageProcessor(db, {
+      aiClient,
+      services,
+      debounceMs: 0,
+    });
+
+    await seedTenant(db, tenantId, phoneNumberId);
+    await processor.process(event(phoneNumberId, "15550105", "wamid.takeover.1", "Hi"));
+
+    const conversations = new ConversationRepository(db);
+    const [conversation] = await conversations.findByWaId(tenantId, "15550105");
+
+    expect(conversation).toBeDefined();
+
+    await services.conversations.updateAiPaused(tenantId, conversation?.id ?? "", true);
+    await processor.process(
+      event(phoneNumberId, "15550105", "wamid.takeover.2", "Can someone help me?"),
+    );
+
+    expect(aiClient.calls).toHaveLength(1);
+
+    await services.conversations.sendStaffConversationText(
+      tenantId,
+      conversation?.id ?? "",
+      "Maria here from the clinic. I can help.",
+    );
+
+    expect(graph.sent.some((sent) => sent.body.includes("Maria here"))).toBe(true);
+
+    await services.conversations.updateAiPaused(tenantId, conversation?.id ?? "", false);
+    await processor.process(
+      event(phoneNumberId, "15550105", "wamid.takeover.3", "Thanks, what are your hours?"),
+    );
+
+    const updated = await conversations.getById(tenantId, conversation?.id ?? "");
+    const messages = await conversations.listMessages(tenantId, conversation?.id ?? "");
+
+    expect(aiClient.calls.length).toBeGreaterThan(1);
+    expect(updated?.data.aiPaused).toBe(false);
+    expect(updated?.data.needsHuman).toBe(false);
+    expect(
+      messages.some(
+        (message) =>
+          message.data.author === "staff" &&
+          message.data.text.includes("Maria here") &&
+          message.data.waMessageId,
+      ),
+    ).toBe(true);
+  });
 });

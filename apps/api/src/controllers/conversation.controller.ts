@@ -1,3 +1,8 @@
+import {
+  ConversationListQuerySchema,
+  CreateConversationMessageDtoSchema,
+  UpdateConversationDtoSchema,
+} from "@clinic-ai/shared";
 import type { Request, Response } from "express";
 
 import type { DomainServicesProvider } from "../services";
@@ -8,9 +13,44 @@ export function createConversationController(getServices: DomainServicesProvider
   return {
     list: async (request: Request, response: Response): Promise<void> => {
       const tenantId = requireRequestTenantId(request);
-      const conversations = await getServices().conversations.listSummaries(tenantId);
+      const query = ConversationListQuerySchema.parse(request.query);
+      const conversations = await getServices().conversations.listSummaries(tenantId, query.state);
 
       response.status(200).json(toJsonValue(conversations));
+    },
+
+    messages: async (request: Request, response: Response): Promise<void> => {
+      const tenantId = requireRequestTenantId(request);
+      const messages = await getServices().conversations.listMessages(
+        tenantId,
+        request.params.id ?? "",
+      );
+
+      response.status(200).json(toJsonValue(messages));
+    },
+
+    sendMessage: async (request: Request, response: Response): Promise<void> => {
+      const tenantId = requireRequestTenantId(request);
+      const body = CreateConversationMessageDtoSchema.parse(request.body);
+      const result = await getServices().conversations.sendStaffConversationText(
+        tenantId,
+        request.params.id ?? "",
+        body.text,
+      );
+
+      response.status(201).json(result);
+    },
+
+    update: async (request: Request, response: Response): Promise<void> => {
+      const tenantId = requireRequestTenantId(request);
+      const body = UpdateConversationDtoSchema.parse(request.body);
+      const conversation = await getServices().conversations.updateAiPaused(
+        tenantId,
+        request.params.id ?? "",
+        body.aiPaused,
+      );
+
+      response.status(200).json(toJsonValue(conversation));
     },
   };
 }

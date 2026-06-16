@@ -96,6 +96,11 @@ pnpm --filter api set-claims <uid> platform_admin
 Current protected dashboard endpoints require `Authorization: Bearer <Firebase ID token>`:
 
 - `GET /api/me`
+- `GET /api/availability?serviceId&from&to`
+- `GET /api/appointments?from&to&status`
+- `POST /api/appointments`
+- `PATCH /api/appointments/:id`
+- `DELETE /api/appointments/:id`
 - `GET /api/services`
 - `POST /api/services` owner only
 - `PATCH /api/services/:id` owner only
@@ -112,4 +117,4 @@ Current protected dashboard endpoints require `Authorization: Bearer <Firebase I
 
 ## Current Scope
 
-Prompt 4 is implemented: Firebase token verification, request context, tenant context, RBAC helpers, standard error envelope, `/api/me`, services/settings/FAQ/patient CRUD, custom-claims utility, tenant-scoped repositories, Firestore rules/indexes, deterministic seed data, and emulator-oriented repository tests.
+Prompt 5 is implemented: availability generation, transactional double-booking-safe appointments, Firebase token verification, request context, tenant context, RBAC helpers, standard error envelope, `/api/me`, services/settings/FAQ/patient CRUD, custom-claims utility, tenant-scoped repositories, Firestore rules/indexes, deterministic seed data, and emulator-oriented repository tests.

@@ -5,15 +5,20 @@ import {
   AppointmentRepository,
   FaqRepository,
   PatientRepository,
+  ResourceRepository,
   ServiceRepository,
   SettingsRepository,
 } from "../repositories";
+import { AppointmentService } from "./appointment.service";
+import { AvailabilityService } from "./availability.service";
 import { FaqService } from "./faq.service";
 import { PatientService } from "./patient.service";
 import { ClinicServiceService } from "./service.service";
 import { SettingsService } from "./settings.service";
 
 export interface DomainServices {
+  appointments: AppointmentService;
+  availability: AvailabilityService;
   clinicServices: ClinicServiceService;
   faqs: FaqService;
   patients: PatientService;
@@ -23,11 +28,19 @@ export interface DomainServices {
 export type DomainServicesProvider = () => DomainServices;
 
 export function createDomainServices(db: Firestore): DomainServices {
+  const appointments = new AppointmentRepository(db);
+  const patients = new PatientRepository(db);
+  const resources = new ResourceRepository(db);
+  const services = new ServiceRepository(db);
+  const settings = new SettingsRepository(db);
+
   return {
-    clinicServices: new ClinicServiceService(new ServiceRepository(db)),
+    appointments: new AppointmentService(appointments, patients, services, resources, settings),
+    availability: new AvailabilityService(settings, services, resources, appointments),
+    clinicServices: new ClinicServiceService(services),
     faqs: new FaqService(new FaqRepository(db)),
-    patients: new PatientService(new PatientRepository(db), new AppointmentRepository(db)),
-    settings: new SettingsService(new SettingsRepository(db)),
+    patients: new PatientService(patients, appointments),
+    settings: new SettingsService(settings),
   };
 }
 

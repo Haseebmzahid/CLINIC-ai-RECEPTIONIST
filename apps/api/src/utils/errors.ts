@@ -23,6 +23,13 @@ export class AppError extends Error {
   }
 }
 
+export class ConflictError extends AppError {
+  constructor(message = "That time was just booked. Here are other options.") {
+    super("SLOT_TAKEN", 409, message);
+    this.name = "ConflictError";
+  }
+}
+
 export function validationErrorFromZod(error: ZodError): AppError {
   return new AppError("VALIDATION_ERROR", 400, "Invalid request.", {
     issues: error.issues.map((issue) => ({

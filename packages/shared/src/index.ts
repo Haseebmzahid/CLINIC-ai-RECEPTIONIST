@@ -272,6 +272,42 @@ export const UpdatePatientDtoSchema = z
 
 export type UpdatePatientDto = z.infer<typeof UpdatePatientDtoSchema>;
 
+export const AvailabilityQuerySchema = z.object({
+  serviceId: z.string().min(1),
+  from: z.string().min(1),
+  to: z.string().min(1),
+  resourceId: z.string().min(1).optional(),
+});
+
+export type AvailabilityQuery = z.infer<typeof AvailabilityQuerySchema>;
+
+export const AppointmentListQuerySchema = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
+  status: AppointmentStatusSchema.optional(),
+});
+
+export type AppointmentListQuery = z.infer<typeof AppointmentListQuerySchema>;
+
+export const CreateAppointmentDtoSchema = z.object({
+  serviceId: z.string().min(1),
+  startsAt: z.string().datetime({ offset: true }),
+  patientId: z.string().min(1),
+  resourceId: z.string().min(1).optional(),
+});
+
+export type CreateAppointmentDto = z.infer<typeof CreateAppointmentDtoSchema>;
+
+export const UpdateAppointmentDtoSchema = z
+  .object({
+    startsAt: z.string().datetime({ offset: true }).optional(),
+    status: AppointmentStatusSchema.optional(),
+    resourceId: z.string().min(1).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, "At least one appointment field is required");
+
+export type UpdateAppointmentDto = z.infer<typeof UpdateAppointmentDtoSchema>;
+
 export const HealthStatusSchema = z.object({
   status: z.literal("ok"),
 });

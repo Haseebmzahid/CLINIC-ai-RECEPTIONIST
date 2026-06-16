@@ -103,6 +103,7 @@ Current protected dashboard endpoints require `Authorization: Bearer <Firebase I
 - `POST /api/appointments`
 - `PATCH /api/appointments/:id`
 - `DELETE /api/appointments/:id`
+- `GET /api/conversations`
 - `GET /api/services`
 - `POST /api/services` owner only
 - `PATCH /api/services/:id` owner only
@@ -119,7 +120,15 @@ Current protected dashboard endpoints require `Authorization: Bearer <Firebase I
 
 ## Current Scope
 
-Prompt 10 is implemented: Firebase email/password dashboard login, protected App Router dashboard shell, typed token-injecting API client with error-envelope parsing, TanStack Query provider, `/api/me` dashboard rendering, route skeletons for dashboard/appointments/conversations/patients/settings/admin tenants, platform-admin gating, inbound-to-AI-to-outbound conversation wiring, debounced AI turns, staff notification records for paused/escalated conversations, end-to-end chat tests for greeting/FAQ/booking/confirmation, conversation-level double-booking race coverage, WhatsApp outbound sending through Meta Graph API, retry/backoff for transient send failures, 24-hour-window template fallback, delivery status callback updates, failed-send staff surfacing, booking confirmation messages, AI booking confirmation wiring, AI prompt assembly, OpenAI tool schemas/handlers, conversation context and FSM updates, guardrails for medical advice/escalation/prompt secrecy, mocked OpenAI tests, WhatsApp inbound webhook verification, fast async queue processing, tenant resolution by `phone_number_id`, idempotent patient/conversation/message persistence, availability generation, transactional double-booking-safe appointments, Firebase token verification, request context, tenant context, RBAC helpers, standard error envelope, `/api/me`, services/settings/FAQ/patient CRUD, custom-claims utility, tenant-scoped repositories, Firestore rules/indexes, deterministic seed data, and emulator-oriented repository tests.
+Prompt 11 is implemented: Firebase email/password dashboard login, protected App Router dashboard shell, typed token-injecting API client with error-envelope parsing, TanStack Query provider, `/api/me` dashboard rendering, route skeletons for dashboard/appointments/conversations/patients/settings/admin tenants, platform-admin gating, inbound-to-AI-to-outbound conversation wiring, debounced AI turns, staff notification records for paused/escalated conversations, end-to-end chat tests for greeting/FAQ/booking/confirmation, conversation-level double-booking race coverage, WhatsApp outbound sending through Meta Graph API, retry/backoff for transient send failures, 24-hour-window template fallback, delivery status callback updates, failed-send staff surfacing, booking confirmation messages, AI booking confirmation wiring, AI prompt assembly, OpenAI tool schemas/handlers, conversation context and FSM updates, guardrails for medical advice/escalation/prompt secrecy, mocked OpenAI tests, WhatsApp inbound webhook verification, fast async queue processing, tenant resolution by `phone_number_id`, idempotent patient/conversation/message persistence, availability generation, transactional double-booking-safe appointments, Firebase token verification, request context, tenant context, RBAC helpers, standard error envelope, `/api/me`, services/settings/FAQ/patient CRUD, custom-claims utility, tenant-scoped repositories, Firestore rules/indexes, deterministic seed data, and emulator-oriented repository tests.
+
+Prompt 11 adds dashboard appointment management: live dashboard appointment KPIs, needs-human alert counts, day/week calendar and appointment list filters, walk-in booking, reschedule, cancel, no-show actions, SLOT_TAKEN conflict messaging, and a Playwright happy-path test.
+
+Run the dashboard E2E test:
+
+```bash
+pnpm --filter web e2e
+```
 
 ## Local WhatsApp Webhook Testing
 

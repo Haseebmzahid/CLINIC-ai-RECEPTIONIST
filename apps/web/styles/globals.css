@@ -372,6 +372,241 @@ input {
   color: var(--foreground);
 }
 
+.toolbar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.compact-field {
+  min-width: 0;
+}
+
+.plain-input {
+  min-height: 40px;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--foreground);
+  padding: 0 10px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  gap: 10px;
+  overflow-x: auto;
+}
+
+.calendar-grid-day {
+  grid-template-columns: 1fr;
+}
+
+.calendar-day {
+  display: grid;
+  min-height: 260px;
+  grid-template-rows: auto 1fr;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.calendar-day header {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding: 0 10px;
+}
+
+.calendar-day header span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.calendar-events {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 10px;
+}
+
+.calendar-empty,
+.muted-note {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.calendar-event,
+.appointment-row {
+  display: grid;
+  width: 100%;
+  min-height: 62px;
+  grid-template-columns: minmax(140px, 1fr) minmax(120px, 1fr) 88px;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--foreground);
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.calendar-event {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.calendar-event:hover,
+.appointment-row:hover {
+  border-color: #9fc5c0;
+  background: var(--primary-soft);
+}
+
+.appointment-row small,
+.calendar-event small {
+  justify-self: start;
+  border-radius: 999px;
+  background: #eef2f6;
+  color: var(--muted);
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.appointment-row-static {
+  border-color: var(--line);
+  background: #ffffff;
+}
+
+.appointment-list {
+  display: grid;
+  gap: 10px;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: rgb(24 33 47 / 42%);
+  padding: 20px;
+}
+
+.dialog-panel {
+  display: grid;
+  width: min(100%, 720px);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgb(24 33 47 / 20%);
+}
+
+.dialog-header,
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding: 16px 18px;
+}
+
+.dialog-actions {
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+}
+
+.dialog-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.dialog-header span {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.dialog-body {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.detail-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.detail-strip span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.slot-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.slot-toolbar span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+}
+
+.slot-button {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--foreground);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.slot-button-active,
+.slot-button:hover {
+  border-color: #9fc5c0;
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+}
+
+.alert-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--danger);
+  font-weight: 800;
+}
+
 @media (max-width: 820px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -401,7 +636,17 @@ input {
   }
 
   .metric-grid,
-  .detail-list {
+  .detail-list,
+  .toolbar,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .calendar-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .appointment-row {
     grid-template-columns: 1fr;
   }
 }

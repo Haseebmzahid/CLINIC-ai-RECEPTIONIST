@@ -1,13 +1,19 @@
 "use client";
 
-import { onAuthStateChanged, signOut, type User } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { ApiClient } from "../api/client";
 import { auth } from "../firebase";
 
+interface AuthUser {
+  uid: string;
+  email: string | null;
+  getIdToken: () => Promise<string>;
+}
+
 interface AuthContextValue {
-  user: User | null;
+  user: AuthUser | null;
   isLoading: boolean;
   api: ApiClient | null;
   signOut: () => Promise<void>;
@@ -16,15 +22,28 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const isE2eBypass = process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === "true";
+  const [user, setUser] = useState<AuthUser | null>(
+    isE2eBypass
+      ? {
+          uid: "staff-e2e",
+          email: "staff@example.com",
+          getIdToken: () => Promise.resolve("e2e-token"),
+        }
+      : null,
+  );
+  const [isLoading, setIsLoading] = useState(!isE2eBypass);
 
   useEffect(() => {
+    if (isE2eBypass) {
+      return undefined;
+    }
+
     return onAuthStateChanged(auth, (nextUser) => {
       setUser(nextUser);
       setIsLoading(false);
     });
-  }, []);
+  }, [isE2eBypass]);
 
   const api = useMemo(() => {
     if (!user) {
@@ -41,9 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       isLoading,
       api,
-      signOut: () => signOut(auth),
+      signOut: () => (isE2eBypass ? Promise.resolve() : signOut(auth)),
     }),
-    [api, isLoading, user],
+    [api, isE2eBypass, isLoading, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

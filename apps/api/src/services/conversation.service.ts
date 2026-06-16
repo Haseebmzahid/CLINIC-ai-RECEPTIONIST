@@ -37,6 +37,16 @@ export interface SendConversationTextResult {
   usedTemplate: boolean;
 }
 
+export interface ConversationSummary {
+  id: string;
+  patientId: string;
+  waId: string;
+  state: string;
+  aiPaused: boolean;
+  needsHuman: boolean;
+  updatedAt: Timestamp;
+}
+
 function isWithinCustomerServiceWindow(lastInboundAt: Timestamp, now: Date): boolean {
   return now.getTime() - lastInboundAt.toMillis() <= CUSTOMER_SERVICE_WINDOW_MS;
 }
@@ -63,6 +73,20 @@ export class ConversationService {
     private readonly whatsapp: WhatsAppOutboundClient = new WhatsAppGraphClient(),
     private readonly clock: () => Date = () => new Date(),
   ) {}
+
+  async listSummaries(tenantId: string): Promise<ConversationSummary[]> {
+    const conversations = await this.conversations.list(tenantId, 100);
+
+    return conversations.map((conversation) => ({
+      id: conversation.id,
+      patientId: conversation.data.patientId,
+      waId: conversation.data.waId,
+      state: conversation.data.state,
+      aiPaused: conversation.data.aiPaused,
+      needsHuman: conversation.data.needsHuman,
+      updatedAt: conversation.data.updatedAt,
+    }));
+  }
 
   async sendConversationText(
     tenantId: string,

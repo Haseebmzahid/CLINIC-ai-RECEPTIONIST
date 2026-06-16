@@ -7,6 +7,7 @@ import { errorHandler, requestContext, type TokenVerifier } from "./middleware";
 import { createLazyDomainServicesProvider } from "./services";
 import { createAppointmentRouter } from "./routes/appointment.route";
 import { createAvailabilityRouter } from "./routes/availability.route";
+import { createConversationRouter } from "./routes/conversation.route";
 import { createFaqRouter } from "./routes/faq.route";
 import { healthRouter } from "./routes/health.route";
 import { createMeRouter } from "./routes/me.route";
@@ -59,6 +60,7 @@ export function createServer(options: ServerOptions = {}) {
   app.use("/api/me", createMeRouter(options.tokenVerifier));
   app.use("/api/availability", createAvailabilityRouter(getServices, options.tokenVerifier));
   app.use("/api/appointments", createAppointmentRouter(getServices, options.tokenVerifier));
+  app.use("/api/conversations", createConversationRouter(getServices, options.tokenVerifier));
   app.use("/api/services", createServiceRouter(getServices, options.tokenVerifier));
   app.use("/api/settings", createSettingsRouter(getServices, options.tokenVerifier));
   app.use("/api/faqs", createFaqRouter(getServices, options.tokenVerifier));

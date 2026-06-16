@@ -415,7 +415,7 @@ describe.skipIf(!shouldRunEmulatorTests)("conversation E2E", () => {
     const processor = new InboundMessageProcessor(db, {
       aiClient,
       services: buildServices(db, graph),
-      debounceMs: 20,
+      debounceMs: 250,
     });
 
     await seedTenant(db, tenantId, phoneNumberId);

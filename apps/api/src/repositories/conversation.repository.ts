@@ -30,6 +30,29 @@ export class ConversationRepository extends TenantCollectionRepository<Conversat
     );
   }
 
+  async findByWaId(
+    tenantId: string,
+    waId: string,
+  ): Promise<Array<RepositoryDocument<Conversation>>> {
+    return this.getQueryResults(this.collection(tenantId).where("waId", "==", waId).limit(1));
+  }
+
+  async listMessages(
+    tenantId: string,
+    conversationId: string,
+  ): Promise<Array<RepositoryDocument<Message>>> {
+    const snapshot = await this.collection(tenantId)
+      .doc(conversationId)
+      .collection("messages")
+      .orderBy("createdAt", "asc")
+      .get();
+
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      data: doc.data() as Message,
+    }));
+  }
+
   async createMessage(
     tenantId: string,
     conversationId: string,

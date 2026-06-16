@@ -25,4 +25,8 @@ export class PatientRepository extends TenantCollectionRepository<Patient> {
       this.collection(tenantId).orderBy("nameLower").startAt(nameLower).endAt(upperBound).limit(20),
     );
   }
+
+  async findByWaId(tenantId: string, waId: string): Promise<Array<{ id: string; data: Patient }>> {
+    return this.getQueryResults(this.collection(tenantId).where("waId", "==", waId).limit(1));
+  }
 }

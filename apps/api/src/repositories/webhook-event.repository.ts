@@ -20,4 +20,19 @@ export class WebhookEventRepository extends TenantCollectionRepository<WebhookEv
         .limit(1),
     );
   }
+
+  async createIfAbsent(tenantId: string, id: string, data: WebhookEvent): Promise<boolean> {
+    const ref = this.collection(tenantId).doc(id);
+
+    return this.db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(ref);
+
+      if (snapshot.exists) {
+        return false;
+      }
+
+      transaction.set(ref, data);
+      return true;
+    });
+  }
 }

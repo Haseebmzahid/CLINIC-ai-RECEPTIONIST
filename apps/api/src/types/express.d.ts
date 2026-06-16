@@ -27,6 +27,7 @@ declare global {
     interface Request {
       requestId: string;
       log: RequestLogger;
+      rawBody?: Buffer;
       auth?: VerifiedAuthClaims;
       ctx?: RequestContext;
     }

@@ -96,6 +96,8 @@ pnpm --filter api set-claims <uid> platform_admin
 Current protected dashboard endpoints require `Authorization: Bearer <Firebase ID token>`:
 
 - `GET /api/me`
+- `GET /api/webhooks/whatsapp` Meta webhook verification handshake
+- `POST /api/webhooks/whatsapp` WhatsApp inbound webhook with `X-Hub-Signature-256`
 - `GET /api/availability?serviceId&from&to`
 - `GET /api/appointments?from&to&status`
 - `POST /api/appointments`
@@ -117,4 +119,21 @@ Current protected dashboard endpoints require `Authorization: Bearer <Firebase I
 
 ## Current Scope
 
-Prompt 5 is implemented: availability generation, transactional double-booking-safe appointments, Firebase token verification, request context, tenant context, RBAC helpers, standard error envelope, `/api/me`, services/settings/FAQ/patient CRUD, custom-claims utility, tenant-scoped repositories, Firestore rules/indexes, deterministic seed data, and emulator-oriented repository tests.
+Prompt 6 is implemented: WhatsApp inbound webhook verification, fast async queue processing, tenant resolution by `phone_number_id`, idempotent patient/conversation/message persistence, availability generation, transactional double-booking-safe appointments, Firebase token verification, request context, tenant context, RBAC helpers, standard error envelope, `/api/me`, services/settings/FAQ/patient CRUD, custom-claims utility, tenant-scoped repositories, Firestore rules/indexes, deterministic seed data, and emulator-oriented repository tests.
+
+## Local WhatsApp Webhook Testing
+
+Run the API locally and expose it with ngrok:
+
+```bash
+pnpm --filter api dev
+ngrok http 4000
+```
+
+Configure the Meta webhook callback URL to:
+
+```text
+https://<ngrok-host>/api/webhooks/whatsapp
+```
+
+Use `WHATSAPP_VERIFY_TOKEN` as the Meta verify token and set `WHATSAPP_APP_SECRET` locally so POST signatures can be verified. Seed or create a tenant whose `whatsapp.phoneNumberId` matches the inbound payload `metadata.phone_number_id`.

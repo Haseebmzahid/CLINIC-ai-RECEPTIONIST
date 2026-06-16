@@ -28,4 +28,21 @@ export class TenantRepository {
   async delete(tenantId: string): Promise<void> {
     await this.db.collection("tenants").doc(tenantId).delete();
   }
+
+  async findByWhatsappPhoneNumberId(
+    phoneNumberId: string,
+  ): Promise<RepositoryDocument<Tenant> | null> {
+    const snapshot = await this.db
+      .collection("tenants")
+      .where("whatsapp.phoneNumberId", "==", phoneNumberId)
+      .limit(1)
+      .get();
+    const doc = snapshot.docs[0];
+
+    if (!doc) {
+      return null;
+    }
+
+    return { id: doc.id, data: doc.data() as Tenant };
+  }
 }

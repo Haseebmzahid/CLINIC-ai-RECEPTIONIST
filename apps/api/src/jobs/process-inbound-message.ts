@@ -4,6 +4,9 @@ import type { Conversation, Message, Patient } from "@clinic-ai/shared";
 import { Timestamp } from "firebase-admin/firestore";
 import type { Firestore } from "firebase-admin/firestore";
 
+import { AiOrchestrator } from "../ai/orchestrator";
+import type { AiClient } from "../integrations/openai";
+import { UnconfiguredOpenAiClient } from "../integrations/openai";
 import type { NormalizedInboundMessageEvent } from "../integrations/whatsapp";
 import {
   ConversationRepository,
@@ -11,6 +14,7 @@ import {
   TenantRepository,
   WebhookEventRepository,
 } from "../repositories";
+import { createDomainServices, type DomainServices } from "../services";
 
 function stableId(prefix: string, value: string): string {
   return `${prefix}_${createHash("sha256").update(value).digest("hex").slice(0, 24)}`;
@@ -35,22 +39,67 @@ export interface InboundWorkerLogger {
   error(message: string, fields?: Record<string, unknown>): void;
 }
 
+export interface InboundMessageProcessorOptions {
+  logger?: InboundWorkerLogger;
+  tenantCacheTtlMs?: number;
+  debounceMs?: number;
+  aiClient?: AiClient;
+  services?: DomainServices;
+  today?: Date;
+  disableAi?: boolean;
+}
+
+interface PendingAiTurn {
+  timer: NodeJS.Timeout;
+  resolve: () => void;
+}
+
+function isInboundWorkerLogger(value: unknown): value is InboundWorkerLogger {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.info === "function" &&
+    typeof candidate.warn === "function" &&
+    typeof candidate.error === "function"
+  );
+}
+
 export class InboundMessageProcessor {
   private readonly tenants: TenantRepository;
   private readonly patients: PatientRepository;
   private readonly conversations: ConversationRepository;
   private readonly webhookEvents: WebhookEventRepository;
   private readonly tenantCache = new Map<string, TenantCacheEntry>();
+  private readonly pendingAiTurns = new Map<string, PendingAiTurn>();
+  private readonly logger: InboundWorkerLogger;
+  private readonly tenantCacheTtlMs: number;
+  private readonly debounceMs: number;
+  private readonly services: DomainServices;
+  private readonly aiClient: AiClient;
+  private readonly disableAi: boolean;
 
   constructor(
-    db: Firestore,
-    private readonly logger: InboundWorkerLogger = console,
-    private readonly tenantCacheTtlMs = 60_000,
+    private readonly db: Firestore,
+    optionsOrLogger: InboundMessageProcessorOptions | InboundWorkerLogger = {},
+    tenantCacheTtlMs = 60_000,
   ) {
-    this.tenants = new TenantRepository(db);
-    this.patients = new PatientRepository(db);
-    this.conversations = new ConversationRepository(db);
-    this.webhookEvents = new WebhookEventRepository(db);
+    const options: InboundMessageProcessorOptions = isInboundWorkerLogger(optionsOrLogger)
+      ? { logger: optionsOrLogger, tenantCacheTtlMs }
+      : optionsOrLogger;
+
+    this.tenants = new TenantRepository(this.db);
+    this.patients = new PatientRepository(this.db);
+    this.conversations = new ConversationRepository(this.db);
+    this.webhookEvents = new WebhookEventRepository(this.db);
+    this.logger = options.logger ?? console;
+    this.tenantCacheTtlMs = options.tenantCacheTtlMs ?? tenantCacheTtlMs;
+    this.debounceMs = options.debounceMs ?? 750;
+    this.services = options.services ?? createDomainServices(this.db);
+    this.aiClient = options.aiClient ?? new UnconfiguredOpenAiClient();
+    this.disableAi = options.disableAi ?? false;
   }
 
   async process(event: NormalizedInboundMessageEvent): Promise<void> {
@@ -87,12 +136,31 @@ export class InboundMessageProcessor {
       this.messageFromEvent(event),
     );
 
-    if (!conversation.data.aiPaused) {
+    if (conversation.data.aiPaused || conversation.data.needsHuman) {
+      await this.recordStaffNotification(
+        tenantId,
+        conversation.id,
+        `Staff notification: patient replied while AI was paused or escalated.`,
+        stableId("staff_note", `${event.messageId}:paused`),
+      );
+      this.logger.info("Inbound WhatsApp message requires staff attention", {
+        tenantId,
+        conversationId: conversation.id,
+        requestId: event.messageId,
+      });
+      return;
+    }
+
+    if (this.disableAi) {
       this.logger.info("Inbound WhatsApp message ready for AI", {
         tenantId,
         conversationId: conversation.id,
+        requestId: event.messageId,
       });
+      return;
     }
+
+    await this.scheduleAiTurn(tenantId, conversation.id, event);
   }
 
   private async resolveTenantId(phoneNumberId: string): Promise<string | null> {
@@ -194,5 +262,143 @@ export class InboundMessageProcessor {
       status: "received",
       createdAt: Timestamp.fromDate(event.timestamp),
     };
+  }
+
+  private scheduleAiTurn(
+    tenantId: string,
+    conversationId: string,
+    event: NormalizedInboundMessageEvent,
+  ): Promise<void> {
+    const key = `${tenantId}:${conversationId}`;
+    const existing = this.pendingAiTurns.get(key);
+
+    if (existing) {
+      clearTimeout(existing.timer);
+      existing.resolve();
+    }
+
+    return new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        this.pendingAiTurns.delete(key);
+        void this.runAiTurn(tenantId, conversationId, event)
+          .catch(async (error: unknown) => {
+            await Promise.all([
+              this.conversations.update(tenantId, conversationId, {
+                needsHuman: true,
+                updatedAt: Timestamp.now(),
+              }),
+              this.recordStaffNotification(
+                tenantId,
+                conversationId,
+                `Staff notification: AI processing failed and needs staff review.`,
+                stableId("staff_note", `${event.messageId}:ai_failed`),
+              ),
+            ]);
+            this.logger.error("Inbound AI turn failed", {
+              tenantId,
+              conversationId,
+              requestId: event.messageId,
+              errorName: error instanceof Error ? error.name : "UnknownError",
+            });
+          })
+          .finally(resolve);
+      }, this.debounceMs);
+
+      this.pendingAiTurns.set(key, { timer, resolve });
+    });
+  }
+
+  private async runAiTurn(
+    tenantId: string,
+    conversationId: string,
+    event: NormalizedInboundMessageEvent,
+  ): Promise<void> {
+    this.logger.info("Inbound WhatsApp message ready for AI", {
+      tenantId,
+      conversationId,
+      requestId: event.messageId,
+    });
+
+    const patientText = await this.latestPatientText(tenantId, conversationId, event.text);
+    const orchestrator = new AiOrchestrator({
+      client: this.aiClient,
+      services: this.services,
+      db: this.db,
+      today: event.timestamp,
+    });
+    const result = await orchestrator.runTurn({
+      tenantId,
+      conversationId,
+      patientText,
+    });
+
+    if (result.needsHuman || result.aiPaused) {
+      await this.recordStaffNotification(
+        tenantId,
+        conversationId,
+        `Staff notification: AI marked this conversation for staff review.`,
+        stableId("staff_note", `${event.messageId}:handoff`),
+      );
+      return;
+    }
+
+    const latestConversation = await this.conversations.getById(tenantId, conversationId);
+
+    if (latestConversation?.data.needsHuman || latestConversation?.data.aiPaused) {
+      await this.recordStaffNotification(
+        tenantId,
+        conversationId,
+        `Staff notification: this conversation is paused or escalated.`,
+        stableId("staff_note", `${event.messageId}:latest_handoff`),
+      );
+      return;
+    }
+
+    if (latestConversation?.data.context.confirmationMessageId && result.state === "booked") {
+      return;
+    }
+
+    await this.services.conversations.sendConversationText(tenantId, conversationId, result.reply);
+  }
+
+  private async latestPatientText(
+    tenantId: string,
+    conversationId: string,
+    fallbackText: string,
+  ): Promise<string> {
+    const messages = await this.conversations.listMessages(tenantId, conversationId);
+    let lastOutboundIndex = -1;
+
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      if (messages[index]?.data.direction === "out") {
+        lastOutboundIndex = index;
+        break;
+      }
+    }
+
+    const trailingInbound = messages
+      .slice(lastOutboundIndex + 1)
+      .filter((message) => message.data.direction === "in")
+      .map((message) => message.data.text.trim())
+      .filter(Boolean);
+
+    return trailingInbound.join("\n") || fallbackText;
+  }
+
+  private async recordStaffNotification(
+    tenantId: string,
+    conversationId: string,
+    text: string,
+    id: string,
+  ): Promise<void> {
+    await this.conversations.createMessage(tenantId, conversationId, id, {
+      direction: "out",
+      channel: "whatsapp",
+      type: "system",
+      text,
+      author: "system",
+      status: "sent",
+      createdAt: Timestamp.now(),
+    });
   }
 }

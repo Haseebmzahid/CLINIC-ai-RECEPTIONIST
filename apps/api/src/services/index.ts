@@ -19,6 +19,14 @@ import { PatientService } from "./patient.service";
 import { ClinicServiceService } from "./service.service";
 import { SettingsService } from "./settings.service";
 
+export { AppointmentService } from "./appointment.service";
+export { AvailabilityService } from "./availability.service";
+export { ConversationService } from "./conversation.service";
+export { FaqService } from "./faq.service";
+export { PatientService } from "./patient.service";
+export { ClinicServiceService } from "./service.service";
+export { SettingsService } from "./settings.service";
+
 export interface DomainServices {
   appointments: AppointmentService;
   availability: AvailabilityService;

@@ -91,7 +91,7 @@ describe.skipIf(!shouldRunEmulatorTests)("WhatsApp inbound webhook", () => {
     process.env.FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID ?? "clinic-ai-test";
     const db = getDb();
 
-    queue = new InboundMessageQueue(new InboundMessageProcessor(db));
+    queue = new InboundMessageQueue(new InboundMessageProcessor(db, { disableAi: true }));
     patients = new PatientRepository(db);
     conversations = new ConversationRepository(db);
     webhookEvents = new WebhookEventRepository(db);

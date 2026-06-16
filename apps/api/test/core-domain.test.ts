@@ -181,9 +181,21 @@ describe.skipIf(!shouldRunEmulatorTests)("core domain API", () => {
   });
 
   it("supports FAQ CRUD happy paths", async () => {
-    const createResponse = await request(app)
+    const forbiddenResponse = await request(app)
       .post("/api/faqs")
       .set("Authorization", "Bearer staff_a")
+      .send({
+        question: "Can staff edit FAQs?",
+        answer: "No.",
+        tags: ["roles"],
+      });
+
+    expect(forbiddenResponse.status).toBe(403);
+    expect(ErrorEnvelopeSchema.parse(forbiddenResponse.body).error.code).toBe("FORBIDDEN");
+
+    const createResponse = await request(app)
+      .post("/api/faqs")
+      .set("Authorization", "Bearer owner_a")
       .send({
         question: "What are your timings?",
         answer: "Mon-Fri, 9am-5pm.",
@@ -195,7 +207,7 @@ describe.skipIf(!shouldRunEmulatorTests)("core domain API", () => {
 
     const patchResponse = await request(app)
       .patch(`/api/faqs/${created.id}`)
-      .set("Authorization", "Bearer staff_a")
+      .set("Authorization", "Bearer owner_a")
       .send({ answer: "Mon-Sat, 9am-5pm." });
 
     expect(patchResponse.status).toBe(200);
@@ -213,7 +225,7 @@ describe.skipIf(!shouldRunEmulatorTests)("core domain API", () => {
 
     const deleteResponse = await request(app)
       .delete(`/api/faqs/${created.id}`)
-      .set("Authorization", "Bearer staff_a");
+      .set("Authorization", "Bearer owner_a");
 
     expect(deleteResponse.status).toBe(204);
   });

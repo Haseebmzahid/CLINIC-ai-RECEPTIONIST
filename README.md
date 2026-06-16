@@ -113,9 +113,9 @@ Current protected dashboard endpoints require `Authorization: Bearer <Firebase I
 - `GET /api/settings`
 - `PUT /api/settings` owner only
 - `GET /api/faqs`
-- `POST /api/faqs`
-- `PATCH /api/faqs/:id`
-- `DELETE /api/faqs/:id`
+- `POST /api/faqs` owner only
+- `PATCH /api/faqs/:id` owner only
+- `DELETE /api/faqs/:id` owner only
 - `GET /api/patients?q=search`
 - `GET /api/patients/:id`
 - `POST /api/patients`
@@ -128,6 +128,8 @@ Prompt 11 is implemented: Firebase email/password dashboard login, protected App
 Prompt 11 adds dashboard appointment management: live dashboard appointment KPIs, needs-human alert counts, day/week calendar and appointment list filters, walk-in booking, reschedule, cancel, no-show actions, SLOT_TAKEN conflict messaging, and a Playwright happy-path test.
 
 Prompt 12 adds the live conversations dashboard: polling inbox filters, state/needs-human/AI-paused badges, transcript rendering, staff manual replies through the outbound WhatsApp service, take-over/resume AI controls, and Playwright coverage for the staff takeover flow.
+
+Prompt 13 completes the dashboard: patient search/detail/edit with booking history, owner-gated profile and working-hours settings, services/fees management, FAQ CRUD with tags, and Playwright coverage for editing a FAQ and seeing the saved value persist through dashboard navigation.
 
 Run the dashboard E2E test:
 

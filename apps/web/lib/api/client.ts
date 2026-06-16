@@ -67,6 +67,37 @@ export const ServiceSchema = z.object({
   active: z.boolean(),
 });
 
+export const SettingsProfileSchema = z.object({
+  timezone: z.string(),
+  locale: z.string(),
+  location: z.object({
+    address: z.string(),
+    mapsUrl: z.string().optional(),
+  }),
+  workingHours: z.record(
+    z.string(),
+    z.array(
+      z.object({
+        open: z.string(),
+        close: z.string(),
+      }),
+    ),
+  ),
+  slotLengthMinutes: z.number(),
+  bufferMinutes: z.number(),
+  minLeadTimeMinutes: z.number(),
+  holidays: z.array(z.string()),
+});
+
+export const FaqSchema = z.object({
+  id: z.string(),
+  question: z.string(),
+  answer: z.string(),
+  tags: z.array(z.string()),
+  active: z.boolean(),
+  updatedAt: z.string(),
+});
+
 export const ConversationSummarySchema = z.object({
   id: z.string(),
   patientId: z.string(),
@@ -101,6 +132,8 @@ export type AppointmentStatus = z.infer<typeof AppointmentStatusSchema>;
 export type AvailabilitySlot = z.infer<typeof AvailabilitySlotSchema>;
 export type Patient = z.infer<typeof PatientSchema>;
 export type Service = z.infer<typeof ServiceSchema>;
+export type SettingsProfile = z.infer<typeof SettingsProfileSchema>;
+export type Faq = z.infer<typeof FaqSchema>;
 export type ConversationSummary = z.infer<typeof ConversationSummarySchema>;
 export type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 export type SendConversationMessageResult = z.infer<typeof SendConversationMessageResultSchema>;
@@ -122,6 +155,41 @@ export interface CreatePatientInput {
   phone: string;
   notes?: string;
 }
+
+export interface UpdatePatientInput {
+  name?: string;
+  notes?: string;
+}
+
+export interface PatientDetail {
+  patient: Patient;
+  appointments: Appointment[];
+}
+
+export interface CreateServiceInput {
+  name: string;
+  durationMinutes: number;
+  fee: number;
+  currency: string;
+  active?: boolean;
+}
+
+export interface UpdateServiceInput {
+  name?: string;
+  durationMinutes?: number;
+  fee?: number;
+  currency?: string;
+  active?: boolean;
+}
+
+export interface CreateFaqInput {
+  question: string;
+  answer: string;
+  tags: string[];
+  active?: boolean;
+}
+
+export type UpdateFaqInput = Partial<Required<CreateFaqInput>>;
 
 export interface CreateAppointmentInput {
   patientId: string;
@@ -160,11 +228,32 @@ const mockService: Service = {
   currency: "USD",
   active: true,
 };
+const mockProfile: SettingsProfile = {
+  timezone: "America/Los_Angeles",
+  locale: "en-US",
+  location: { address: "123 Care Ave", mapsUrl: "https://maps.example.test/clinic" },
+  workingHours: {
+    "0": [],
+    "1": [{ open: "09:00", close: "17:00" }],
+    "2": [{ open: "09:00", close: "17:00" }],
+    "3": [{ open: "09:00", close: "17:00" }],
+    "4": [{ open: "09:00", close: "17:00" }],
+    "5": [{ open: "09:00", close: "15:00" }],
+    "6": [],
+  },
+  slotLengthMinutes: 30,
+  bufferMinutes: 0,
+  minLeadTimeMinutes: 30,
+  holidays: [],
+};
 const mockStore: {
   appointments: Appointment[];
   conversations: ConversationSummary[];
+  faqs: Faq[];
   messages: Record<string, ConversationMessage[]>;
   patients: Patient[];
+  profile: SettingsProfile;
+  services: Service[];
 } = {
   appointments: [],
   conversations: [
@@ -204,11 +293,60 @@ const mockStore: {
       },
     ],
   },
+  faqs: [
+    {
+      id: "faq_e2e_location",
+      question: "Where are you located?",
+      answer: "We are located at 123 Care Ave.",
+      tags: ["location"],
+      active: true,
+      updatedAt: new Date().toISOString(),
+    },
+  ],
   patients: [],
+  profile: mockProfile,
+  services: [mockService],
 };
 
 function mockTimestamp(): string {
   return new Date().toISOString();
+}
+
+function loadMockFaqs(): Faq[] {
+  if (typeof window === "undefined") {
+    return mockStore.faqs;
+  }
+
+  const stored = window.localStorage.getItem("clinic-ai-e2e-faqs");
+
+  if (!stored) {
+    return mockStore.faqs;
+  }
+
+  let value: unknown;
+
+  try {
+    value = JSON.parse(stored);
+  } catch {
+    return mockStore.faqs;
+  }
+
+  const parsed = z.array(FaqSchema).safeParse(value);
+
+  if (!parsed.success) {
+    return mockStore.faqs;
+  }
+
+  mockStore.faqs = parsed.data;
+  return mockStore.faqs;
+}
+
+function saveMockFaqs(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem("clinic-ai-e2e-faqs", JSON.stringify(mockStore.faqs));
 }
 
 function isInRange(value: string, from: string, to: string): boolean {
@@ -225,7 +363,7 @@ export class ApiClient {
 
   async getMe(): Promise<Me> {
     if (isE2eApiMock) {
-      return { uid: "staff-e2e", role: "staff", tenantId: "clinic-e2e" };
+      return { uid: "owner-e2e", role: "owner", tenantId: "clinic-e2e" };
     }
 
     return this.request("/api/me", MeSchema);
@@ -289,10 +427,49 @@ export class ApiClient {
 
   async listServices(): Promise<Service[]> {
     if (isE2eApiMock) {
-      return [mockService];
+      return mockStore.services;
     }
 
     return this.request("/api/services", z.array(ServiceSchema));
+  }
+
+  async createService(input: CreateServiceInput): Promise<Service> {
+    if (isE2eApiMock) {
+      const service = {
+        id: `svc_e2e_${mockStore.services.length + 1}`,
+        active: input.active ?? true,
+        currency: input.currency,
+        durationMinutes: input.durationMinutes,
+        fee: input.fee,
+        name: input.name,
+      };
+
+      mockStore.services.push(service);
+      return service;
+    }
+
+    return this.request("/api/services", ServiceSchema, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  async updateService(serviceId: string, input: UpdateServiceInput): Promise<Service> {
+    if (isE2eApiMock) {
+      const service = mockStore.services.find((item) => item.id === serviceId);
+
+      if (!service) {
+        throw new ApiClientError("NOT_FOUND", "Service not found.");
+      }
+
+      Object.assign(service, input);
+      return service;
+    }
+
+    return this.request(`/api/services/${serviceId}`, ServiceSchema, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
   }
 
   async listPatients(query = ""): Promise<Patient[]> {
@@ -332,6 +509,52 @@ export class ApiClient {
 
     return this.request("/api/patients", PatientSchema, {
       method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  async getPatient(patientId: string): Promise<PatientDetail> {
+    const PatientDetailSchema = z.object({
+      patient: PatientSchema,
+      appointments: z.array(AppointmentSchema),
+    });
+
+    if (isE2eApiMock) {
+      const patient = mockStore.patients.find((item) => item.id === patientId);
+
+      if (!patient) {
+        throw new ApiClientError("NOT_FOUND", "Patient not found.");
+      }
+
+      return {
+        patient,
+        appointments: mockStore.appointments.filter(
+          (appointment) => appointment.patientId === patientId,
+        ),
+      };
+    }
+
+    return this.request(`/api/patients/${patientId}`, PatientDetailSchema);
+  }
+
+  async updatePatient(patientId: string, input: UpdatePatientInput): Promise<Patient> {
+    if (isE2eApiMock) {
+      const patient = mockStore.patients.find((item) => item.id === patientId);
+
+      if (!patient) {
+        throw new ApiClientError("NOT_FOUND", "Patient not found.");
+      }
+
+      Object.assign(patient, {
+        name: input.name ?? patient.name,
+        nameLower: input.name ? input.name.toLowerCase() : patient.nameLower,
+        notes: input.notes ?? patient.notes,
+      });
+      return patient;
+    }
+
+    return this.request(`/api/patients/${patientId}`, PatientSchema, {
+      method: "PATCH",
       body: JSON.stringify(input),
     });
   }
@@ -541,6 +764,88 @@ export class ApiClient {
     return this.request(`/api/conversations/${conversationId}`, ConversationSummarySchema, {
       method: "PATCH",
       body: JSON.stringify(input),
+    });
+  }
+
+  async getSettings(): Promise<SettingsProfile> {
+    if (isE2eApiMock) {
+      return mockStore.profile;
+    }
+
+    return this.request("/api/settings", SettingsProfileSchema);
+  }
+
+  async updateSettings(input: SettingsProfile): Promise<SettingsProfile> {
+    if (isE2eApiMock) {
+      mockStore.profile = input;
+      return mockStore.profile;
+    }
+
+    return this.request("/api/settings", SettingsProfileSchema, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+  }
+
+  async listFaqs(): Promise<Faq[]> {
+    if (isE2eApiMock) {
+      return loadMockFaqs();
+    }
+
+    return this.request("/api/faqs", z.array(FaqSchema));
+  }
+
+  async createFaq(input: CreateFaqInput): Promise<Faq> {
+    if (isE2eApiMock) {
+      const faq = {
+        id: `faq_e2e_${mockStore.faqs.length + 1}`,
+        active: input.active ?? true,
+        answer: input.answer,
+        question: input.question,
+        tags: input.tags,
+        updatedAt: mockTimestamp(),
+      };
+
+      mockStore.faqs.push(faq);
+      saveMockFaqs();
+      return faq;
+    }
+
+    return this.request("/api/faqs", FaqSchema, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  async updateFaq(faqId: string, input: UpdateFaqInput): Promise<Faq> {
+    if (isE2eApiMock) {
+      const faq = mockStore.faqs.find((item) => item.id === faqId);
+
+      if (!faq) {
+        throw new ApiClientError("NOT_FOUND", "FAQ not found.");
+      }
+
+      Object.assign(faq, input, { updatedAt: mockTimestamp() });
+      saveMockFaqs();
+      return faq;
+    }
+
+    return this.request(`/api/faqs/${faqId}`, FaqSchema, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  }
+
+  async deleteFaq(faqId: string): Promise<void> {
+    if (isE2eApiMock) {
+      mockStore.faqs = mockStore.faqs.filter((item) => item.id !== faqId);
+      saveMockFaqs();
+      return;
+    }
+
+    await this.request(`/api/faqs/${faqId}`, z.unknown(), {
+      method: "DELETE",
+      parseJson: false,
     });
   }
 

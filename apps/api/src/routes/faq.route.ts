@@ -17,11 +17,11 @@ export function createFaqRouter(
   const router = Router();
   const controller = createFaqController(getServices);
 
-  router.use(requireAuth(verifier), requireTenantContext, requireRole("owner", "staff"));
-  router.get("/", asyncHandler(controller.list));
-  router.post("/", asyncHandler(controller.create));
-  router.patch("/:id", asyncHandler(controller.update));
-  router.delete("/:id", asyncHandler(controller.delete));
+  router.use(requireAuth(verifier), requireTenantContext);
+  router.get("/", requireRole("owner", "staff"), asyncHandler(controller.list));
+  router.post("/", requireRole("owner"), asyncHandler(controller.create));
+  router.patch("/:id", requireRole("owner"), asyncHandler(controller.update));
+  router.delete("/:id", requireRole("owner"), asyncHandler(controller.delete));
 
   return router;
 }

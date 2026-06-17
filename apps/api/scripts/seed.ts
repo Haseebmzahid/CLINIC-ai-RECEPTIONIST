@@ -1,219 +1,101 @@
-import type { Faq, Patient, Resource, Service, SettingsProfile, Tenant } from "@clinic-ai/shared";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import type { Tenant } from "@clinic-ai/shared";
+import { config } from "dotenv";
 import { Timestamp } from "firebase-admin/firestore";
 
-import { getDb } from "../src/integrations/firebase";
-import {
-  FaqRepository,
-  PatientRepository,
-  ResourceRepository,
-  ServiceRepository,
-  SettingsRepository,
-  TenantRepository,
-} from "../src/repositories";
+const currentDir = dirname(fileURLToPath(import.meta.url));
+
+config({ path: resolve(currentDir, "../.env.local") });
+
+const [{ getAdminAuth, getDb }, { TenantRepository }] = await Promise.all([
+  import("../src/integrations/firebase"),
+  import("../src/repositories"),
+]);
 
 const tenantId = "clinic_a";
-const secondTenantId = "clinic_b";
-const now = Timestamp.fromDate(new Date("2026-06-15T00:00:00.000Z"));
+const ownerEmail = "admin@clinic-a.com";
+const ownerPassword = "Admin123!";
+const now = Timestamp.now();
 
 const tenant: Tenant = {
-  name: "Bright Smile Dental",
-  slug: "bright-smile",
+  name: "Clinic A",
+  slug: "clinic-a",
   status: "active",
   whatsapp: {
-    phoneNumberId: "1029384756",
-    displayPhone: "+92 300 1234567",
-    wabaId: "waba_clinic_a",
-    accessTokenRef: "secret://wa_clinic_a",
+    phoneNumberId: "clinic_a_phone_number_id",
+    displayPhone: "+1 555 0100",
+    wabaId: "clinic_a_waba_id",
+    accessTokenRef: "env://WHATSAPP_ACCESS_TOKEN",
   },
   subscription: {
-    plan: "professional",
+    plan: "local",
     seats: 5,
-    renewsAt: Timestamp.fromDate(new Date("2027-06-15T00:00:00.000Z")),
+    renewsAt: Timestamp.fromDate(new Date("2099-01-01T00:00:00.000Z")),
   },
   createdAt: now,
   updatedAt: now,
 };
 
-const secondTenant: Tenant = {
-  name: "Northside Family Clinic",
-  slug: "northside-family",
-  status: "active",
-  whatsapp: {
-    phoneNumberId: "2039485761",
-    displayPhone: "+92 300 7654321",
-    wabaId: "waba_clinic_b",
-    accessTokenRef: "secret://wa_clinic_b",
-  },
-  subscription: {
-    plan: "professional",
-    seats: 4,
-    renewsAt: Timestamp.fromDate(new Date("2027-06-15T00:00:00.000Z")),
-  },
-  createdAt: now,
-  updatedAt: now,
-};
+function errorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return undefined;
+  }
 
-const profile: SettingsProfile = {
-  timezone: "Asia/Karachi",
-  locale: "en",
-  location: {
-    address: "12 Mall Rd, Lahore",
-    mapsUrl: "https://maps.example.com/bright-smile",
-  },
-  workingHours: {
-    "0": [],
-    "1": [{ open: "09:00", close: "17:00" }],
-    "2": [{ open: "09:00", close: "17:00" }],
-    "3": [{ open: "09:00", close: "17:00" }],
-    "4": [{ open: "09:00", close: "17:00" }],
-    "5": [{ open: "09:00", close: "17:00" }],
-    "6": [{ open: "10:00", close: "14:00" }],
-  },
-  slotLengthMinutes: 30,
-  bufferMinutes: 5,
-  minLeadTimeMinutes: 120,
-  holidays: ["2026-06-28"],
-};
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
+}
 
-const services: Record<string, Service> = {
-  svc_cleaning: {
-    name: "Dental Cleaning",
-    durationMinutes: 30,
-    fee: 350000,
-    currency: "PKR",
-    active: true,
-  },
-  svc_checkup: {
-    name: "Dental Checkup",
-    durationMinutes: 20,
-    fee: 200000,
-    currency: "PKR",
-    active: true,
-  },
-};
+async function upsertOwnerUser(): Promise<string> {
+  const auth = getAdminAuth();
 
-const resources: Record<string, Resource> = {
-  res_default: {
-    name: "Dr. Khan",
-    type: "practitioner",
-    active: true,
-  },
-};
+  try {
+    const existing = await auth.getUserByEmail(ownerEmail);
 
-const faqs: Record<string, Faq> = {
-  faq_hours: {
-    question: "What are your timings?",
-    answer: "We're open Mon-Fri 9am-5pm and Sat 10am-2pm.",
-    tags: ["hours"],
-    active: true,
-    updatedAt: now,
-  },
-  faq_location: {
-    question: "Where are you located?",
-    answer: "We're at 12 Mall Rd, Lahore.",
-    tags: ["location"],
-    active: true,
-    updatedAt: now,
-  },
-  faq_fee: {
-    question: "How much is a cleaning?",
-    answer: "A dental cleaning is PKR 3,500.",
-    tags: ["pricing", "services"],
-    active: true,
-    updatedAt: now,
-  },
-};
+    await auth.updateUser(existing.uid, {
+      email: ownerEmail,
+      password: ownerPassword,
+      disabled: false,
+    });
+    await auth.setCustomUserClaims(existing.uid, {
+      tenantId,
+      role: "owner",
+    });
 
-const patients: Record<string, Patient> = {
-  pat_sara: {
-    waId: "923001234567",
-    phone: "+923001234567",
-    name: "Sara",
-    nameLower: "sara",
-    notes: "",
-    lastSeenAt: now,
-    createdAt: now,
-  },
-  pat_ahmed: {
-    waId: "923009876543",
-    phone: "+923009876543",
-    name: "Ahmed",
-    nameLower: "ahmed",
-    notes: "Prefers morning appointments.",
-    lastSeenAt: now,
-    createdAt: now,
-  },
-};
+    return existing.uid;
+  } catch (error) {
+    if (errorCode(error) !== "auth/user-not-found") {
+      throw error;
+    }
 
-const secondTenantPatients: Record<string, Patient> = {
-  pat_mina: {
-    waId: "923005551111",
-    phone: "+923005551111",
-    name: "Mina",
-    nameLower: "mina",
-    notes: "Clinic B seed patient.",
-    lastSeenAt: now,
-    createdAt: now,
-  },
-};
+    const created = await auth.createUser({
+      email: ownerEmail,
+      password: ownerPassword,
+      emailVerified: true,
+      disabled: false,
+    });
+
+    await auth.setCustomUserClaims(created.uid, {
+      tenantId,
+      role: "owner",
+    });
+
+    return created.uid;
+  }
+}
 
 async function seed(): Promise<void> {
-  const db = getDb();
-  const tenants = new TenantRepository(db);
-  const settings = new SettingsRepository(db);
-  const serviceRepository = new ServiceRepository(db);
-  const resourceRepository = new ResourceRepository(db);
-  const faqRepository = new FaqRepository(db);
-  const patientRepository = new PatientRepository(db);
+  const tenants = new TenantRepository(getDb());
 
   await tenants.create(tenantId, tenant);
-  await tenants.create(secondTenantId, secondTenant);
-  await settings.setProfile(tenantId, profile);
-  await settings.setProfile(secondTenantId, {
-    ...profile,
-    location: {
-      address: "44 Canal Rd, Lahore",
-      mapsUrl: "https://maps.example.com/northside-family",
-    },
-  });
+  const uid = await upsertOwnerUser();
 
-  await Promise.all(
-    Object.entries(services).map(([id, service]) =>
-      serviceRepository.create(tenantId, id, service),
-    ),
-  );
-  await Promise.all(
-    Object.entries(services).map(([id, service]) =>
-      serviceRepository.create(secondTenantId, id, service),
-    ),
-  );
-  await Promise.all(
-    Object.entries(resources).map(([id, resource]) =>
-      resourceRepository.create(tenantId, id, resource),
-    ),
-  );
-  await Promise.all(
-    Object.entries(resources).map(([id, resource]) =>
-      resourceRepository.create(secondTenantId, id, resource),
-    ),
-  );
-  await Promise.all(
-    Object.entries(faqs).map(([id, faq]) => faqRepository.create(tenantId, id, faq)),
-  );
-  await Promise.all(
-    Object.entries(faqs).map(([id, faq]) => faqRepository.create(secondTenantId, id, faq)),
-  );
-  await Promise.all(
-    Object.entries(patients).map(([id, patient]) =>
-      patientRepository.create(tenantId, id, patient),
-    ),
-  );
-  await Promise.all(
-    Object.entries(secondTenantPatients).map(([id, patient]) =>
-      patientRepository.create(secondTenantId, id, patient),
-    ),
-  );
+  console.log("Seed complete.");
+  console.log(`Tenant: ${tenantId}`);
+  console.log(`Owner UID: ${uid}`);
+  console.log(`Email: ${ownerEmail}`);
+  console.log(`Password: ${ownerPassword}`);
 }
 
 await seed();
-console.log(`Seeded ${tenantId} and ${secondTenantId}`);

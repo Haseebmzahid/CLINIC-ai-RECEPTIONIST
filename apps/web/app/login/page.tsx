@@ -17,6 +17,10 @@ function hasE2eBypassFlag(): boolean {
     return false;
   }
 
+  if ((window as Window & { __CLINIC_AI_E2E__?: boolean }).__CLINIC_AI_E2E__ === true) {
+    return true;
+  }
+
   return window.localStorage.getItem("clinic-ai-e2e-auth-bypass") === "true";
 }
 

@@ -21,6 +21,12 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const e2eUser: AuthUser = {
+  uid: "staff-e2e",
+  email: "staff@example.com",
+  getIdToken: () => Promise.resolve("e2e-token"),
+};
+
 function hasE2eBypassFlag(): boolean {
   if (process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === "true") {
     return true;
@@ -30,21 +36,27 @@ function hasE2eBypassFlag(): boolean {
     return false;
   }
 
+  if ((window as Window & { __CLINIC_AI_E2E__?: boolean }).__CLINIC_AI_E2E__ === true) {
+    return true;
+  }
+
   return window.localStorage.getItem("clinic-ai-e2e-auth-bypass") === "true";
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const isE2eBypass = hasE2eBypassFlag();
-  const [user, setUser] = useState<AuthUser | null>(
-    isE2eBypass
-      ? {
-          uid: "staff-e2e",
-          email: "staff@example.com",
-          getIdToken: () => Promise.resolve("e2e-token"),
-        }
-      : null,
-  );
+  const [isE2eBypass, setIsE2eBypass] = useState(() => hasE2eBypassFlag());
+  const [user, setUser] = useState<AuthUser | null>(isE2eBypass ? e2eUser : null);
   const [isLoading, setIsLoading] = useState(!isE2eBypass);
+
+  useEffect(() => {
+    if (isE2eBypass || !hasE2eBypassFlag()) {
+      return;
+    }
+
+    setIsE2eBypass(true);
+    setUser(e2eUser);
+    setIsLoading(false);
+  }, [isE2eBypass]);
 
   useEffect(() => {
     if (isE2eBypass) {

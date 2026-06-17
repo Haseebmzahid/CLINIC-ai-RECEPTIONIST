@@ -1,13 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-import { enableE2eMode } from "./support";
+import { openLoginInE2eMode, submitE2eLogin } from "./support";
 
 test("edit a FAQ and verify it persists in the dashboard", async ({ page }) => {
-  await page.goto("/login");
-  await enableE2eMode(page);
+  await openLoginInE2eMode(page);
   await page.getByLabel("Email").fill("owner@example.com");
   await page.getByLabel("Password").fill("password");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await submitE2eLogin(page);
 
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   await page.goto("/settings/faqs");

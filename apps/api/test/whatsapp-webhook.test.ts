@@ -123,13 +123,16 @@ describe.skipIf(!shouldRunEmulatorTests)("WhatsApp inbound webhook", () => {
       whatsappVerifyToken: verifyToken,
     });
     const rawBody = inboundPayload(`wamid.${runId}.valid`);
+    const startedAt = performance.now();
     const response = await request(app)
       .post("/api/webhooks/whatsapp")
       .set("Content-Type", "application/json")
       .set("X-Hub-Signature-256", signatureFor(rawBody))
       .send(rawBody);
+    const ackLatencyMs = performance.now() - startedAt;
 
     expect(response.status).toBe(200);
+    expect(ackLatencyMs).toBeLessThan(200);
 
     await queue.onIdle();
 

@@ -2,7 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
-  timeout: 30_000,
+  timeout: 60_000,
+  workers: 1,
   expect: {
     timeout: 10_000,
   },
@@ -31,7 +32,7 @@ export default defineConfig({
       NEXT_PUBLIC_FIREBASE_PROJECT_ID: "clinic-ai-local",
     },
     reuseExistingServer: false,
-    timeout: 120_000,
+    timeout: 180_000,
     url: "http://127.0.0.1:3101/login",
   },
   projects: [

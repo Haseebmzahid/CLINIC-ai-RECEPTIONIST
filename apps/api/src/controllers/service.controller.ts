@@ -24,6 +24,10 @@ export function createServiceController(getServices: DomainServicesProvider) {
         `svc_${randomUUID()}`,
         body,
       );
+      await getServices().auditLogs.recordStaffMutation(tenantId, request.ctx, {
+        action: "service.create",
+        target: `services/${created.id}`,
+      });
 
       response.status(201).json(withId(created.id, created.data));
     },
@@ -36,6 +40,10 @@ export function createServiceController(getServices: DomainServicesProvider) {
         request.params.id ?? "",
         body,
       );
+      await getServices().auditLogs.recordStaffMutation(tenantId, request.ctx, {
+        action: "service.update",
+        target: `services/${updated.id}`,
+      });
 
       response.status(200).json(withId(updated.id, updated.data));
     },

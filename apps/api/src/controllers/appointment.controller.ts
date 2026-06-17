@@ -47,6 +47,10 @@ export function createAppointmentController(getServices: DomainServicesProvider)
         body,
         request.ctx?.uid ?? "unknown",
       );
+      await getServices().auditLogs.recordStaffMutation(tenantId, request.ctx, {
+        action: "appointment.create",
+        target: `appointments/${appointment.id}`,
+      });
 
       response.status(201).json(withId(appointment.id, appointment.data));
     },
@@ -59,6 +63,10 @@ export function createAppointmentController(getServices: DomainServicesProvider)
         request.params.id ?? "",
         body,
       );
+      await getServices().auditLogs.recordStaffMutation(tenantId, request.ctx, {
+        action: "appointment.update",
+        target: `appointments/${appointment.id}`,
+      });
 
       response.status(200).json(withId(appointment.id, appointment.data));
     },
@@ -67,6 +75,10 @@ export function createAppointmentController(getServices: DomainServicesProvider)
       const tenantId = requireRequestTenantId(request);
 
       await getServices().appointments.cancel(tenantId, request.params.id ?? "");
+      await getServices().auditLogs.recordStaffMutation(tenantId, request.ctx, {
+        action: "appointment.cancel",
+        target: `appointments/${request.params.id ?? ""}`,
+      });
       response.status(204).send();
     },
   };

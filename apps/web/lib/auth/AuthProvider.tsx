@@ -21,8 +21,20 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function hasE2eBypassFlag(): boolean {
+  if (process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === "true") {
+    return true;
+  }
+
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.localStorage.getItem("clinic-ai-e2e-auth-bypass") === "true";
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const isE2eBypass = process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === "true";
+  const isE2eBypass = hasE2eBypassFlag();
   const [user, setUser] = useState<AuthUser | null>(
     isE2eBypass
       ? {

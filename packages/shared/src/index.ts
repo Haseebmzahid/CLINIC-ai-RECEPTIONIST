@@ -204,6 +204,7 @@ export const WebhookEventSchema = z.object({
   provider: WebhookProviderSchema,
   externalId: z.string().min(1),
   processedAt: FirestoreTimestampSchema,
+  expiresAt: FirestoreTimestampSchema.optional(),
 });
 
 export type WebhookEvent = z.infer<typeof WebhookEventSchema>;
@@ -253,6 +254,7 @@ export type UpdateFaqDto = z.infer<typeof UpdateFaqDtoSchema>;
 
 export const PatientSearchQuerySchema = z.object({
   q: z.string().trim().optional(),
+  limit: z.coerce.number().int().positive().max(100).optional(),
 });
 
 export type PatientSearchQuery = z.infer<typeof PatientSearchQuerySchema>;
@@ -294,6 +296,7 @@ export type AppointmentListQuery = z.infer<typeof AppointmentListQuerySchema>;
 
 export const ConversationListQuerySchema = z.object({
   state: ConversationStateSchema.optional(),
+  limit: z.coerce.number().int().positive().max(100).optional(),
 });
 
 export type ConversationListQuery = z.infer<typeof ConversationListQuerySchema>;
@@ -334,5 +337,52 @@ export const HealthStatusSchema = z.object({
 });
 
 export type HealthStatusDto = z.infer<typeof HealthStatusSchema>;
+
+export const CreateTenantDtoSchema = z.object({
+  id: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9_ -]+$/)
+    .transform((value) =>
+      value
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, "_"),
+    ),
+  name: z.string().trim().min(1),
+  slug: z.string().trim().min(1),
+  status: TenantStatusSchema.default("trial"),
+  whatsapp: z.object({
+    phoneNumberId: z.string().trim().min(1),
+    displayPhone: z.string().trim().min(1),
+    wabaId: z.string().trim().min(1),
+    accessTokenRef: z.string().trim().min(1),
+  }),
+  subscription: z.object({
+    plan: z.string().trim().min(1),
+    seats: z.number().int().positive(),
+    renewsAt: z.string().datetime({ offset: true }),
+  }),
+});
+
+export type CreateTenantDto = z.infer<typeof CreateTenantDtoSchema>;
+
+export const UpdateTenantDtoSchema = z
+  .object({
+    name: z.string().trim().min(1).optional(),
+    slug: z.string().trim().min(1).optional(),
+    status: TenantStatusSchema.optional(),
+    whatsapp: TenantSchema.shape.whatsapp.partial().optional(),
+    subscription: z
+      .object({
+        plan: z.string().trim().min(1).optional(),
+        seats: z.number().int().positive().optional(),
+        renewsAt: z.string().datetime({ offset: true }).optional(),
+      })
+      .optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, "At least one tenant field is required");
+
+export type UpdateTenantDto = z.infer<typeof UpdateTenantDtoSchema>;
 
 export const productName = "Clinic AI Receptionist";

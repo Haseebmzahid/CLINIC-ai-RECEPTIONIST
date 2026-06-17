@@ -15,7 +15,8 @@ import {
   ServiceRepository,
   SettingsRepository,
 } from "../repositories";
-import { AppError } from "../utils";
+import { logInfo, logWarn, metrics } from "../observability";
+import { AppError, ConflictError } from "../utils";
 import type { Clock } from "./availability.service";
 
 export type AppointmentStatus = z.infer<typeof AppointmentStatusSchema>;
@@ -123,7 +124,31 @@ export class AppointmentService {
       updatedAt: now,
     };
 
-    return this.appointments.createBookingTransaction(tenantId, appointmentId, appointment);
+    try {
+      const created = await this.appointments.createBookingTransaction(
+        tenantId,
+        appointmentId,
+        appointment,
+      );
+
+      logInfo("appointment.booked", {
+        appointmentId,
+        serviceId: dto.serviceId,
+        source: appointment.source,
+        tenantId,
+      });
+      return created;
+    } catch (error) {
+      if (error instanceof ConflictError) {
+        metrics.incrementAppointmentConflict();
+        logWarn("appointment.conflict", {
+          attemptedSlot: startsAt.toISOString(),
+          tenantId,
+        });
+      }
+
+      throw error;
+    }
   }
 
   async update(
@@ -192,7 +217,20 @@ export class AppointmentService {
       updatedAt: Timestamp.fromDate(now),
     };
 
-    return this.appointments.updateInTransaction(tenantId, appointmentId, nextAppointment);
+    try {
+      return await this.appointments.updateInTransaction(tenantId, appointmentId, nextAppointment);
+    } catch (error) {
+      if (error instanceof ConflictError) {
+        metrics.incrementAppointmentConflict();
+        logWarn("appointment.conflict", {
+          appointmentId,
+          attemptedSlot: startsAtDate.toISOString(),
+          tenantId,
+        });
+      }
+
+      throw error;
+    }
   }
 
   async cancel(tenantId: string, appointmentId: string): Promise<void> {

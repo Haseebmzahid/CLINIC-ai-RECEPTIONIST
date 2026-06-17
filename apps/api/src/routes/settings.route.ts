@@ -6,6 +6,7 @@ import {
   requireAuth,
   requireRole,
   requireTenantContext,
+  tenantRateLimit,
   type TokenVerifier,
 } from "../middleware";
 import type { DomainServicesProvider } from "../services";
@@ -17,7 +18,7 @@ export function createSettingsRouter(
   const router = Router();
   const controller = createSettingsController(getServices);
 
-  router.use(requireAuth(verifier), requireTenantContext);
+  router.use(requireAuth(verifier), requireTenantContext, tenantRateLimit);
   router.get("/", requireRole("owner", "staff"), asyncHandler(controller.get));
   router.put("/", requireRole("owner"), asyncHandler(controller.put));
 

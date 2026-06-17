@@ -8,6 +8,18 @@ import { FormEvent, Suspense, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { auth } from "../../lib/firebase";
 
+function hasE2eBypassFlag(): boolean {
+  if (process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === "true") {
+    return true;
+  }
+
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.localStorage.getItem("clinic-ai-e2e-auth-bypass") === "true";
+}
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -22,7 +34,7 @@ function LoginForm() {
     setIsSubmitting(true);
 
     try {
-      if (process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS !== "true") {
+      if (!hasE2eBypassFlag()) {
         await signInWithEmailAndPassword(auth, email, password);
       }
       router.replace(searchParams.get("next") || "/dashboard");

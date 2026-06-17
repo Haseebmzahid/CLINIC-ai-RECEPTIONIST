@@ -11,6 +11,7 @@ import { getDb } from "../src/integrations/firebase";
 import { InboundMessageProcessor } from "../src/jobs";
 import {
   AppointmentRepository,
+  AuditLogRepository,
   ConversationRepository,
   FaqRepository,
   PatientRepository,
@@ -20,7 +21,9 @@ import {
   TenantRepository,
 } from "../src/repositories";
 import {
+  AdminService,
   AppointmentService,
+  AuditLogService,
   AvailabilityService,
   ClinicServiceService,
   ConversationService,
@@ -253,6 +256,7 @@ function buildServices(db: FirebaseFirestore.Firestore, graph: MockGraphClient):
   const settingsRepository = new SettingsRepository(db);
 
   return {
+    admin: new AdminService(new TenantRepository(db)),
     appointments: new AppointmentService(
       appointments,
       patients,
@@ -268,6 +272,7 @@ function buildServices(db: FirebaseFirestore.Firestore, graph: MockGraphClient):
       appointments,
       () => new Date("2099-01-18T09:00:00.000Z"),
     ),
+    auditLogs: new AuditLogService(new AuditLogRepository(db)),
     clinicServices: new ClinicServiceService(services),
     conversations: new ConversationService(
       new TenantRepository(db),

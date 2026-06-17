@@ -6,6 +6,7 @@ import {
   requireAuth,
   requireRole,
   requireTenantContext,
+  tenantRateLimit,
   type TokenVerifier,
 } from "../middleware";
 import type { DomainServicesProvider } from "../services";
@@ -17,7 +18,12 @@ export function createAppointmentRouter(
   const router = Router();
   const controller = createAppointmentController(getServices);
 
-  router.use(requireAuth(verifier), requireTenantContext, requireRole("owner", "staff"));
+  router.use(
+    requireAuth(verifier),
+    requireTenantContext,
+    tenantRateLimit,
+    requireRole("owner", "staff"),
+  );
   router.get("/", asyncHandler(controller.list));
   router.post("/", asyncHandler(controller.create));
   router.patch("/:id", asyncHandler(controller.update));

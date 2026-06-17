@@ -14,7 +14,11 @@ export function createConversationController(getServices: DomainServicesProvider
     list: async (request: Request, response: Response): Promise<void> => {
       const tenantId = requireRequestTenantId(request);
       const query = ConversationListQuerySchema.parse(request.query);
-      const conversations = await getServices().conversations.listSummaries(tenantId, query.state);
+      const conversations = await getServices().conversations.listSummaries(
+        tenantId,
+        query.state,
+        query.limit,
+      );
 
       response.status(200).json(toJsonValue(conversations));
     },
@@ -37,6 +41,10 @@ export function createConversationController(getServices: DomainServicesProvider
         request.params.id ?? "",
         body.text,
       );
+      await getServices().auditLogs.recordStaffMutation(tenantId, request.ctx, {
+        action: "conversation.message.create",
+        target: `conversations/${request.params.id ?? ""}/messages/${result.messageId}`,
+      });
 
       response.status(201).json(result);
     },
@@ -49,6 +57,11 @@ export function createConversationController(getServices: DomainServicesProvider
         request.params.id ?? "",
         body.aiPaused,
       );
+      await getServices().auditLogs.recordStaffMutation(tenantId, request.ctx, {
+        action: "conversation.update",
+        target: `conversations/${request.params.id ?? ""}`,
+        meta: { aiPaused: body.aiPaused },
+      });
 
       response.status(200).json(toJsonValue(conversation));
     },

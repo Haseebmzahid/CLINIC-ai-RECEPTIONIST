@@ -1,7 +1,10 @@
 import { expect, test } from "@playwright/test";
 
+import { enableE2eMode } from "./support";
+
 test("take over a conversation, send a manual reply, and resume AI", async ({ page }) => {
   await page.goto("/login");
+  await enableE2eMode(page);
   await page.getByLabel("Email").fill("staff@example.com");
   await page.getByLabel("Password").fill("password");
   await page.getByRole("button", { name: "Sign in" }).click();

@@ -7,19 +7,32 @@ export default defineConfig({
     timeout: 10_000,
   },
   use: {
-    baseURL: "http://127.0.0.1:3100",
+    baseURL: "http://127.0.0.1:3101",
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: "http://127.0.0.1:3101",
+          localStorage: [
+            { name: "clinic-ai-e2e-auth-bypass", value: "true" },
+            { name: "clinic-ai-e2e-api-mock", value: "true" },
+          ],
+        },
+      ],
+    },
     trace: "on-first-retry",
   },
   webServer: {
-    command: "pnpm dev --hostname 127.0.0.1 --port 3100",
+    command:
+      'powershell -NoProfile -Command "Remove-Item -LiteralPath .next -Recurse -Force -ErrorAction SilentlyContinue; pnpm dev --hostname 127.0.0.1 --port 3101"',
     env: {
       NEXT_PUBLIC_E2E_AUTH_BYPASS: "true",
       NEXT_PUBLIC_E2E_API_MOCK: "true",
       NEXT_PUBLIC_FIREBASE_PROJECT_ID: "clinic-ai-local",
     },
-    reuseExistingServer: true,
+    reuseExistingServer: false,
     timeout: 120_000,
-    url: "http://127.0.0.1:3100/login",
+    url: "http://127.0.0.1:3101/login",
   },
   projects: [
     {

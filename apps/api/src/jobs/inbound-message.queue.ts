@@ -1,4 +1,5 @@
 import type { NormalizedInboundMessageEvent } from "../integrations/whatsapp";
+import { logError, metrics } from "../observability";
 import type { InboundMessageProcessor } from "./process-inbound-message";
 
 export class InboundMessageQueue {
@@ -10,20 +11,19 @@ export class InboundMessageQueue {
   enqueue(events: NormalizedInboundMessageEvent[]): void {
     for (const event of events) {
       this.pending += 1;
+      metrics.setWebhookQueueDepth(this.pending);
       setImmediate(() => {
         void this.processor
           .process(event)
           .catch((error: unknown) => {
-            console.error(
-              JSON.stringify({
-                level: "error",
-                message: "Inbound WhatsApp worker failed",
-                errorName: error instanceof Error ? error.name : "UnknownError",
-              }),
-            );
+            metrics.incrementWebhookDlq();
+            logError("webhook.worker_failed", {
+              errorName: error instanceof Error ? error.name : "UnknownError",
+            });
           })
           .finally(() => {
             this.pending -= 1;
+            metrics.setWebhookQueueDepth(this.pending);
             this.resolveIdleIfNeeded();
           });
       });
@@ -43,6 +43,8 @@ export class InboundMessageQueue {
   }
 
   private resolveIdleIfNeeded(): void {
+    metrics.setWebhookQueueDepth(this.pending);
+
     if (this.pending !== 0) {
       return;
     }

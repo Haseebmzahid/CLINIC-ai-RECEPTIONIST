@@ -18,6 +18,10 @@ export function createSettingsController(getServices: DomainServicesProvider) {
       const tenantId = requireRequestTenantId(request);
       const body = UpsertSettingsDtoSchema.parse(request.body);
       const profile = await getServices().settings.setProfile(tenantId, body);
+      await getServices().auditLogs.recordStaffMutation(tenantId, request.ctx, {
+        action: "settings.profile.upsert",
+        target: "settings/profile",
+      });
 
       response.status(200).json(toJsonValue(profile.data));
     },

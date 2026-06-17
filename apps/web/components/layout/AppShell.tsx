@@ -1,9 +1,11 @@
 "use client";
 
+import * as Sentry from "@sentry/nextjs";
 import { useQuery } from "@tanstack/react-query";
 import {
   CalendarDays,
   ChevronRight,
+  Building2,
   LayoutDashboard,
   LogOut,
   MessageSquareText,
@@ -12,7 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import { useAuth } from "../../lib/auth/AuthProvider";
 import { Button } from "../ui/Button";
@@ -24,6 +26,7 @@ const navItems = [
   { href: "/patients", label: "Patients", icon: Users },
   { href: "/settings/profile", label: "Settings", icon: Settings },
 ];
+const adminNavItems = [{ href: "/admin/tenants", label: "Tenants", icon: Building2 }];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -41,6 +44,17 @@ export function AppShell({ children }: { children: ReactNode }) {
     enabled: Boolean(api),
   });
 
+  useEffect(() => {
+    if (!meQuery.data) {
+      return;
+    }
+
+    Sentry.setUser({ id: meQuery.data.uid });
+    Sentry.setTag("role", meQuery.data.role);
+    Sentry.setTag("tenantId", meQuery.data.tenantId ?? "platform");
+    Sentry.setTag("release", process.env.NEXT_PUBLIC_APP_RELEASE ?? "local");
+  }, [meQuery.data]);
+
   async function handleSignOut() {
     await signOut();
     router.replace("/login");
@@ -57,22 +71,24 @@ export function AppShell({ children }: { children: ReactNode }) {
           </span>
         </Link>
         <nav className="nav-list" aria-label="Dashboard">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          {[...navItems, ...(meQuery.data?.role === "platform_admin" ? adminNavItems : [])].map(
+            (item) => {
+              const Icon = item.icon;
+              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
-            return (
-              <Link
-                className={isActive ? "nav-link nav-link-active" : "nav-link"}
-                href={item.href}
-                key={item.href}
-              >
-                <Icon aria-hidden="true" size={18} />
-                <span>{item.label}</span>
-                {isActive ? <ChevronRight aria-hidden="true" size={16} /> : null}
-              </Link>
-            );
-          })}
+              return (
+                <Link
+                  className={isActive ? "nav-link nav-link-active" : "nav-link"}
+                  href={item.href}
+                  key={item.href}
+                >
+                  <Icon aria-hidden="true" size={18} />
+                  <span>{item.label}</span>
+                  {isActive ? <ChevronRight aria-hidden="true" size={16} /> : null}
+                </Link>
+              );
+            },
+          )}
         </nav>
       </aside>
       <div className="shell-main">

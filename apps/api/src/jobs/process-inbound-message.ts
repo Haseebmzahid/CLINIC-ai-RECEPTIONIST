@@ -14,6 +14,7 @@ import {
   TenantRepository,
   WebhookEventRepository,
 } from "../repositories";
+import { hashIdentifier, metrics, structuredWorkerLogger } from "../observability";
 import { createDomainServices, type DomainServices } from "../services";
 
 function stableId(prefix: string, value: string): string {
@@ -94,7 +95,7 @@ export class InboundMessageProcessor {
     this.patients = new PatientRepository(this.db);
     this.conversations = new ConversationRepository(this.db);
     this.webhookEvents = new WebhookEventRepository(this.db);
-    this.logger = options.logger ?? console;
+    this.logger = options.logger ?? structuredWorkerLogger;
     this.tenantCacheTtlMs = options.tenantCacheTtlMs ?? tenantCacheTtlMs;
     this.debounceMs = options.debounceMs ?? 750;
     this.services = options.services ?? createDomainServices(this.db);
@@ -107,7 +108,7 @@ export class InboundMessageProcessor {
 
     if (!tenantId) {
       this.logger.warn("Unknown WhatsApp phone_number_id; dropping inbound event", {
-        phoneNumberId: event.phoneNumberId,
+        phoneNumberIdHash: hashIdentifier(event.phoneNumberId),
       });
       return;
     }
@@ -119,6 +120,7 @@ export class InboundMessageProcessor {
         provider: "whatsapp",
         externalId: event.messageId,
         processedAt: Timestamp.now(),
+        expiresAt: Timestamp.fromMillis(Date.now() + 30 * 24 * 60 * 60 * 1000),
       },
     );
 
@@ -129,6 +131,7 @@ export class InboundMessageProcessor {
 
     const patient = await this.upsertPatient(tenantId, event);
     const conversation = await this.upsertConversation(tenantId, event, patient.id);
+    metrics.incrementTenantMessages(tenantId);
     await this.conversations.createMessage(
       tenantId,
       conversation.id,
@@ -294,6 +297,7 @@ export class InboundMessageProcessor {
                 stableId("staff_note", `${event.messageId}:ai_failed`),
               ),
             ]);
+            metrics.incrementAiError();
             this.logger.error("Inbound AI turn failed", {
               tenantId,
               conversationId,
@@ -318,6 +322,7 @@ export class InboundMessageProcessor {
       conversationId,
       requestId: event.messageId,
     });
+    metrics.incrementTenantAiTurns(tenantId);
 
     const patientText = await this.latestPatientText(tenantId, conversationId, event.text);
     const orchestrator = new AiOrchestrator({

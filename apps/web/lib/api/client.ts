@@ -127,6 +127,31 @@ export const SendConversationMessageResultSchema = z.object({
   usedTemplate: z.boolean(),
 });
 
+export const TenantSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  status: z.enum(["active", "suspended", "trial"]),
+  whatsapp: z.object({
+    phoneNumberId: z.string(),
+    displayPhone: z.string(),
+    wabaId: z.string(),
+    accessTokenRef: z.string(),
+  }),
+  subscription: z.object({
+    plan: z.string(),
+    seats: z.number(),
+    renewsAt: z.string(),
+  }),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const AdminHealthSchema = z.object({
+  status: z.literal("ok"),
+  metrics: z.unknown(),
+});
+
 export type Appointment = z.infer<typeof AppointmentSchema>;
 export type AppointmentStatus = z.infer<typeof AppointmentStatusSchema>;
 export type AvailabilitySlot = z.infer<typeof AvailabilitySlotSchema>;
@@ -137,6 +162,8 @@ export type Faq = z.infer<typeof FaqSchema>;
 export type ConversationSummary = z.infer<typeof ConversationSummarySchema>;
 export type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 export type SendConversationMessageResult = z.infer<typeof SendConversationMessageResultSchema>;
+export type Tenant = z.infer<typeof TenantSchema>;
+export type AdminHealth = z.infer<typeof AdminHealthSchema>;
 
 export interface AppointmentListParams {
   from: string;
@@ -202,6 +229,30 @@ export interface UpdateAppointmentInput {
   status?: AppointmentStatus;
 }
 
+export interface CreateTenantInput {
+  id: string;
+  name: string;
+  slug: string;
+  status: "active" | "suspended" | "trial";
+  whatsapp: {
+    phoneNumberId: string;
+    displayPhone: string;
+    wabaId: string;
+    accessTokenRef: string;
+  };
+  subscription: {
+    plan: string;
+    seats: number;
+    renewsAt: string;
+  };
+}
+
+export interface UpdateTenantInput {
+  name?: string;
+  slug?: string;
+  status?: "active" | "suspended" | "trial";
+}
+
 export interface ConversationListParams {
   state?: string;
 }
@@ -219,7 +270,17 @@ export class ApiClientError extends Error {
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
-const isE2eApiMock = process.env.NEXT_PUBLIC_E2E_API_MOCK === "true";
+function isE2eApiMock(): boolean {
+  if (process.env.NEXT_PUBLIC_E2E_API_MOCK === "true") {
+    return true;
+  }
+
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.localStorage.getItem("clinic-ai-e2e-api-mock") === "true";
+}
 const mockService: Service = {
   id: "svc_e2e_cleaning",
   name: "Cleaning",
@@ -362,7 +423,7 @@ export class ApiClient {
   constructor(private readonly options: ApiClientOptions) {}
 
   async getMe(): Promise<Me> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       return { uid: "owner-e2e", role: "owner", tenantId: "clinic-e2e" };
     }
 
@@ -370,7 +431,7 @@ export class ApiClient {
   }
 
   async listAppointments(params: AppointmentListParams): Promise<Appointment[]> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       return mockStore.appointments.filter(
         (appointment) =>
           isInRange(appointment.startsAt, params.from, params.to) &&
@@ -391,7 +452,7 @@ export class ApiClient {
   }
 
   async listAvailability(params: AvailabilityParams): Promise<AvailabilitySlot[]> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       const from = new Date(params.from);
       const slots = [9, 10, 11, 14].map((hour) => {
         const startsAt = new Date(from);
@@ -426,7 +487,7 @@ export class ApiClient {
   }
 
   async listServices(): Promise<Service[]> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       return mockStore.services;
     }
 
@@ -434,7 +495,7 @@ export class ApiClient {
   }
 
   async createService(input: CreateServiceInput): Promise<Service> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       const service = {
         id: `svc_e2e_${mockStore.services.length + 1}`,
         active: input.active ?? true,
@@ -455,7 +516,7 @@ export class ApiClient {
   }
 
   async updateService(serviceId: string, input: UpdateServiceInput): Promise<Service> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       const service = mockStore.services.find((item) => item.id === serviceId);
 
       if (!service) {
@@ -473,7 +534,7 @@ export class ApiClient {
   }
 
   async listPatients(query = ""): Promise<Patient[]> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       return mockStore.patients.filter((patient) =>
         `${patient.name} ${patient.phone}`.toLowerCase().includes(query.toLowerCase()),
       );
@@ -490,7 +551,7 @@ export class ApiClient {
   }
 
   async createPatient(input: CreatePatientInput): Promise<Patient> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       const now = mockTimestamp();
       const patient = {
         id: `pat_${mockStore.patients.length + 1}`,
@@ -519,7 +580,7 @@ export class ApiClient {
       appointments: z.array(AppointmentSchema),
     });
 
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       const patient = mockStore.patients.find((item) => item.id === patientId);
 
       if (!patient) {
@@ -538,7 +599,7 @@ export class ApiClient {
   }
 
   async updatePatient(patientId: string, input: UpdatePatientInput): Promise<Patient> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       const patient = mockStore.patients.find((item) => item.id === patientId);
 
       if (!patient) {
@@ -560,7 +621,7 @@ export class ApiClient {
   }
 
   async createAppointment(input: CreateAppointmentInput): Promise<Appointment> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       if (
         mockStore.appointments.some(
           (appointment) =>
@@ -600,7 +661,7 @@ export class ApiClient {
     appointmentId: string,
     input: UpdateAppointmentInput,
   ): Promise<Appointment> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       const existing = mockStore.appointments.find(
         (appointment) => appointment.id === appointmentId,
       );
@@ -641,7 +702,7 @@ export class ApiClient {
   }
 
   async cancelAppointment(appointmentId: string): Promise<void> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       const existing = mockStore.appointments.find(
         (appointment) => appointment.id === appointmentId,
       );
@@ -660,7 +721,7 @@ export class ApiClient {
   }
 
   async listConversations(params: ConversationListParams = {}): Promise<ConversationSummary[]> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       return mockStore.conversations.filter(
         (conversation) => !params.state || conversation.state === params.state,
       );
@@ -677,7 +738,7 @@ export class ApiClient {
   }
 
   async listConversationMessages(conversationId: string): Promise<ConversationMessage[]> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       return mockStore.messages[conversationId] ?? [];
     }
 
@@ -691,7 +752,7 @@ export class ApiClient {
     conversationId: string,
     text: string,
   ): Promise<SendConversationMessageResult> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       const id = `msg_e2e_${(mockStore.messages[conversationId] ?? []).length + 1}`;
       const now = mockTimestamp();
       const message: ConversationMessage = {
@@ -735,7 +796,7 @@ export class ApiClient {
     conversationId: string,
     input: { aiPaused: boolean },
   ): Promise<ConversationSummary> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       const now = mockTimestamp();
       const updated = mockStore.conversations.map((conversation) => {
         if (conversation.id !== conversationId) {
@@ -768,7 +829,7 @@ export class ApiClient {
   }
 
   async getSettings(): Promise<SettingsProfile> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       return mockStore.profile;
     }
 
@@ -776,7 +837,7 @@ export class ApiClient {
   }
 
   async updateSettings(input: SettingsProfile): Promise<SettingsProfile> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       mockStore.profile = input;
       return mockStore.profile;
     }
@@ -788,7 +849,7 @@ export class ApiClient {
   }
 
   async listFaqs(): Promise<Faq[]> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       return loadMockFaqs();
     }
 
@@ -796,7 +857,7 @@ export class ApiClient {
   }
 
   async createFaq(input: CreateFaqInput): Promise<Faq> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       const faq = {
         id: `faq_e2e_${mockStore.faqs.length + 1}`,
         active: input.active ?? true,
@@ -818,7 +879,7 @@ export class ApiClient {
   }
 
   async updateFaq(faqId: string, input: UpdateFaqInput): Promise<Faq> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       const faq = mockStore.faqs.find((item) => item.id === faqId);
 
       if (!faq) {
@@ -837,7 +898,7 @@ export class ApiClient {
   }
 
   async deleteFaq(faqId: string): Promise<void> {
-    if (isE2eApiMock) {
+    if (isE2eApiMock()) {
       mockStore.faqs = mockStore.faqs.filter((item) => item.id !== faqId);
       saveMockFaqs();
       return;
@@ -847,6 +908,24 @@ export class ApiClient {
       method: "DELETE",
       parseJson: false,
     });
+  }
+
+  async createTenant(input: CreateTenantInput): Promise<Tenant> {
+    return this.request("/api/admin/tenants", TenantSchema, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  async updateTenant(tenantId: string, input: UpdateTenantInput): Promise<Tenant> {
+    return this.request(`/api/admin/tenants/${tenantId}`, TenantSchema, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  }
+
+  async getAdminHealth(): Promise<AdminHealth> {
+    return this.request("/api/admin/health", AdminHealthSchema);
   }
 
   private async request<T>(

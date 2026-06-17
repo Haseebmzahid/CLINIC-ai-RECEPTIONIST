@@ -24,11 +24,15 @@ export class PatientService {
     private readonly appointments: AppointmentRepository,
   ) {}
 
-  async search(tenantId: string, query?: string): Promise<Array<RepositoryDocument<Patient>>> {
+  async search(
+    tenantId: string,
+    query?: string,
+    limit = 100,
+  ): Promise<Array<RepositoryDocument<Patient>>> {
     const normalizedQuery = query?.trim();
 
     if (!normalizedQuery) {
-      return this.patients.list(tenantId);
+      return this.patients.list(tenantId, limit);
     }
 
     const [phoneMatches, nameMatches] = await Promise.all([
@@ -41,7 +45,7 @@ export class PatientService {
       results.set(match.id, match);
     }
 
-    return [...results.values()];
+    return [...results.values()].slice(0, limit);
   }
 
   async getDetail(tenantId: string, id: string): Promise<PatientDetail> {

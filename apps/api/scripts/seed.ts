@@ -12,6 +12,7 @@ import {
 } from "../src/repositories";
 
 const tenantId = "clinic_a";
+const secondTenantId = "clinic_b";
 const now = Timestamp.fromDate(new Date("2026-06-15T00:00:00.000Z"));
 
 const tenant: Tenant = {
@@ -27,6 +28,25 @@ const tenant: Tenant = {
   subscription: {
     plan: "professional",
     seats: 5,
+    renewsAt: Timestamp.fromDate(new Date("2027-06-15T00:00:00.000Z")),
+  },
+  createdAt: now,
+  updatedAt: now,
+};
+
+const secondTenant: Tenant = {
+  name: "Northside Family Clinic",
+  slug: "northside-family",
+  status: "active",
+  whatsapp: {
+    phoneNumberId: "2039485761",
+    displayPhone: "+92 300 7654321",
+    wabaId: "waba_clinic_b",
+    accessTokenRef: "secret://wa_clinic_b",
+  },
+  subscription: {
+    plan: "professional",
+    seats: 4,
     renewsAt: Timestamp.fromDate(new Date("2027-06-15T00:00:00.000Z")),
   },
   createdAt: now,
@@ -125,6 +145,18 @@ const patients: Record<string, Patient> = {
   },
 };
 
+const secondTenantPatients: Record<string, Patient> = {
+  pat_mina: {
+    waId: "923005551111",
+    phone: "+923005551111",
+    name: "Mina",
+    nameLower: "mina",
+    notes: "Clinic B seed patient.",
+    lastSeenAt: now,
+    createdAt: now,
+  },
+};
+
 async function seed(): Promise<void> {
   const db = getDb();
   const tenants = new TenantRepository(db);
@@ -135,11 +167,24 @@ async function seed(): Promise<void> {
   const patientRepository = new PatientRepository(db);
 
   await tenants.create(tenantId, tenant);
+  await tenants.create(secondTenantId, secondTenant);
   await settings.setProfile(tenantId, profile);
+  await settings.setProfile(secondTenantId, {
+    ...profile,
+    location: {
+      address: "44 Canal Rd, Lahore",
+      mapsUrl: "https://maps.example.com/northside-family",
+    },
+  });
 
   await Promise.all(
     Object.entries(services).map(([id, service]) =>
       serviceRepository.create(tenantId, id, service),
+    ),
+  );
+  await Promise.all(
+    Object.entries(services).map(([id, service]) =>
+      serviceRepository.create(secondTenantId, id, service),
     ),
   );
   await Promise.all(
@@ -148,14 +193,27 @@ async function seed(): Promise<void> {
     ),
   );
   await Promise.all(
+    Object.entries(resources).map(([id, resource]) =>
+      resourceRepository.create(secondTenantId, id, resource),
+    ),
+  );
+  await Promise.all(
     Object.entries(faqs).map(([id, faq]) => faqRepository.create(tenantId, id, faq)),
+  );
+  await Promise.all(
+    Object.entries(faqs).map(([id, faq]) => faqRepository.create(secondTenantId, id, faq)),
   );
   await Promise.all(
     Object.entries(patients).map(([id, patient]) =>
       patientRepository.create(tenantId, id, patient),
     ),
   );
+  await Promise.all(
+    Object.entries(secondTenantPatients).map(([id, patient]) =>
+      patientRepository.create(secondTenantId, id, patient),
+    ),
+  );
 }
 
 await seed();
-console.log(`Seeded ${tenantId}`);
+console.log(`Seeded ${tenantId} and ${secondTenantId}`);

@@ -8,6 +8,7 @@ import {
 } from "../integrations/whatsapp";
 import type { InboundMessageQueue, WhatsAppStatusProcessor } from "../jobs";
 import { asyncHandler } from "../middleware";
+import { hashIdentifier } from "../observability";
 import { AppError } from "../utils";
 
 const HandshakeQuerySchema = z.object({
@@ -55,6 +56,23 @@ export function createWhatsAppWebhookRouter(options: WhatsAppWebhookRouterOption
 
       const events = parseWhatsAppInboundMessages(request.body);
       const statusEvents = parseWhatsAppStatusEvents(request.body);
+
+      for (const event of events) {
+        request.log.info("webhook.received", {
+          phoneNumberIdHash: hashIdentifier(event.phoneNumberId),
+          type: event.messageType,
+          waMessageId: event.messageId,
+        });
+      }
+
+      for (const event of statusEvents) {
+        request.log.info("webhook.received", {
+          phoneNumberIdHash: hashIdentifier(event.phoneNumberId),
+          status: event.status,
+          type: "status",
+          waMessageId: event.waMessageId,
+        });
+      }
 
       options.getQueue().enqueue(events);
       for (const event of statusEvents) {

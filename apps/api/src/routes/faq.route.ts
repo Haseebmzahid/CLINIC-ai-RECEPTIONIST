@@ -6,6 +6,7 @@ import {
   requireAuth,
   requireRole,
   requireTenantContext,
+  tenantRateLimit,
   type TokenVerifier,
 } from "../middleware";
 import type { DomainServicesProvider } from "../services";
@@ -17,7 +18,7 @@ export function createFaqRouter(
   const router = Router();
   const controller = createFaqController(getServices);
 
-  router.use(requireAuth(verifier), requireTenantContext);
+  router.use(requireAuth(verifier), requireTenantContext, tenantRateLimit);
   router.get("/", requireRole("owner", "staff"), asyncHandler(controller.list));
   router.post("/", requireRole("owner"), asyncHandler(controller.create));
   router.patch("/:id", requireRole("owner"), asyncHandler(controller.update));

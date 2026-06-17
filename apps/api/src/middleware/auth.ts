@@ -49,10 +49,12 @@ export function requireAuth(verifier?: TokenVerifier) {
         next();
       } catch (error) {
         if (error instanceof AppError) {
+          request.log.warn("auth.denied", { reason: error.code });
           next(error);
           return;
         }
 
+        request.log.warn("auth.denied", { reason: "invalid_token" });
         next(new AppError("UNAUTHENTICATED", 401, "Invalid bearer token."));
       }
     })();

@@ -2,6 +2,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import type { Firestore } from "firebase-admin/firestore";
 
 import type { NormalizedWhatsAppStatusEvent } from "../integrations/whatsapp";
+import { hashIdentifier, metrics, structuredWorkerLogger } from "../observability";
 import { ConversationRepository, TenantRepository } from "../repositories";
 
 interface TenantCacheEntry {
@@ -21,7 +22,7 @@ export class WhatsAppStatusProcessor {
 
   constructor(
     db: Firestore,
-    private readonly logger: WhatsAppStatusLogger = console,
+    private readonly logger: WhatsAppStatusLogger = structuredWorkerLogger,
     private readonly tenantCacheTtlMs = 60_000,
   ) {
     this.tenants = new TenantRepository(db);
@@ -33,7 +34,7 @@ export class WhatsAppStatusProcessor {
 
     if (!tenantId) {
       this.logger.warn("Unknown WhatsApp phone_number_id; dropping status event", {
-        phoneNumberId: event.phoneNumberId,
+        phoneNumberIdHash: hashIdentifier(event.phoneNumberId),
       });
       return;
     }
@@ -53,6 +54,7 @@ export class WhatsAppStatusProcessor {
     });
 
     if (event.status === "failed") {
+      metrics.incrementWhatsappSendFailure();
       await this.conversations.update(tenantId, message.conversationId, {
         needsHuman: true,
         updatedAt: Timestamp.fromDate(event.timestamp),

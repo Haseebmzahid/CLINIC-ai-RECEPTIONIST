@@ -3,9 +3,11 @@ import helmet from "helmet";
 
 import { getDb } from "./integrations/firebase";
 import { InboundMessageProcessor, InboundMessageQueue, WhatsAppStatusProcessor } from "./jobs";
-import { errorHandler, requestContext, type TokenVerifier } from "./middleware";
+import { errorHandler, publicRateLimit, requestContext, type TokenVerifier } from "./middleware";
+import { initSentry } from "./observability";
 import { createLazyDomainServicesProvider } from "./services";
 import { createAppointmentRouter } from "./routes/appointment.route";
+import { createAdminRouter } from "./routes/admin.route";
 import { createAvailabilityRouter } from "./routes/availability.route";
 import { createConversationRouter } from "./routes/conversation.route";
 import { createFaqRouter } from "./routes/faq.route";
@@ -25,6 +27,8 @@ export interface ServerOptions {
 }
 
 export function createServer(options: ServerOptions = {}) {
+  initSentry();
+
   const app = express();
   const getServices = createLazyDomainServicesProvider();
   let whatsappQueue = options.whatsappQueue;
@@ -47,6 +51,7 @@ export function createServer(options: ServerOptions = {}) {
       },
     }),
   );
+  app.use("/api", publicRateLimit);
   app.use("/api/health", healthRouter);
   app.use(
     "/api/webhooks/whatsapp",
@@ -58,6 +63,7 @@ export function createServer(options: ServerOptions = {}) {
     }),
   );
   app.use("/api/me", createMeRouter(options.tokenVerifier));
+  app.use("/api/admin", createAdminRouter(getServices, options.tokenVerifier));
   app.use("/api/availability", createAvailabilityRouter(getServices, options.tokenVerifier));
   app.use("/api/appointments", createAppointmentRouter(getServices, options.tokenVerifier));
   app.use("/api/conversations", createConversationRouter(getServices, options.tokenVerifier));

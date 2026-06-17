@@ -13,6 +13,7 @@ import {
 } from "../repositories";
 import type { WhatsAppGraphSendResult } from "../integrations/whatsapp";
 import { WhatsAppGraphClient } from "../integrations/whatsapp";
+import { logInfo, metrics } from "../observability";
 import { AppError } from "../utils";
 
 const CUSTOMER_SERVICE_WINDOW_MS = 24 * 60 * 60 * 1_000;
@@ -89,8 +90,9 @@ export class ConversationService {
   async listSummaries(
     tenantId: string,
     state?: Conversation["state"],
+    limit = 100,
   ): Promise<ConversationSummary[]> {
-    const conversations = (await this.conversations.listRecent(tenantId, 100)).filter(
+    const conversations = (await this.conversations.listRecent(tenantId, limit)).filter(
       (conversation) => !state || conversation.data.state === state,
     );
 
@@ -212,6 +214,12 @@ export class ConversationService {
         waMessageId: sent.waMessageId,
         status: "sent",
       });
+      logInfo("wa.send", {
+        status: "sent",
+        tenantId,
+        usedTemplate: sent.usedTemplate,
+        waMessageId: sent.waMessageId,
+      });
 
       return {
         messageId: id,
@@ -220,6 +228,12 @@ export class ConversationService {
         usedTemplate: sent.usedTemplate,
       };
     } catch {
+      metrics.incrementWhatsappSendFailure();
+      logInfo("wa.send", {
+        status: "failed",
+        tenantId,
+        usedTemplate: shouldUseTemplate,
+      });
       await Promise.all([
         this.conversations.updateMessage(tenantId, conversationId, id, { status: "failed" }),
         this.conversations.update(tenantId, conversationId, {

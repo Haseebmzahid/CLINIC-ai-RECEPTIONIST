@@ -3,6 +3,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import { getDb } from "../integrations/firebase";
 import {
   AppointmentRepository,
+  AuditLogRepository,
   ConversationRepository,
   FaqRepository,
   PatientRepository,
@@ -12,6 +13,8 @@ import {
   TenantRepository,
 } from "../repositories";
 import { AppointmentService } from "./appointment.service";
+import { AdminService } from "./admin.service";
+import { AuditLogService } from "./audit-log.service";
 import { AvailabilityService } from "./availability.service";
 import { ConversationService } from "./conversation.service";
 import { FaqService } from "./faq.service";
@@ -19,7 +22,9 @@ import { PatientService } from "./patient.service";
 import { ClinicServiceService } from "./service.service";
 import { SettingsService } from "./settings.service";
 
+export { AdminService } from "./admin.service";
 export { AppointmentService } from "./appointment.service";
+export { AuditLogService } from "./audit-log.service";
 export { AvailabilityService } from "./availability.service";
 export { ConversationService } from "./conversation.service";
 export { FaqService } from "./faq.service";
@@ -28,7 +33,9 @@ export { ClinicServiceService } from "./service.service";
 export { SettingsService } from "./settings.service";
 
 export interface DomainServices {
+  admin: AdminService;
   appointments: AppointmentService;
+  auditLogs: AuditLogService;
   availability: AvailabilityService;
   clinicServices: ClinicServiceService;
   conversations: ConversationService;
@@ -47,7 +54,9 @@ export function createDomainServices(db: Firestore): DomainServices {
   const settings = new SettingsRepository(db);
 
   return {
+    admin: new AdminService(new TenantRepository(db)),
     appointments: new AppointmentService(appointments, patients, services, resources, settings),
+    auditLogs: new AuditLogService(new AuditLogRepository(db)),
     availability: new AvailabilityService(settings, services, resources, appointments),
     clinicServices: new ClinicServiceService(services),
     conversations: new ConversationService(

@@ -13,6 +13,7 @@ export function requireTenantContext(
   }
 
   if (request.auth.role !== "platform_admin" && !request.auth.tenantId) {
+    request.log.warn("auth.denied", { reason: "missing_tenant_claim", uid: request.auth.uid });
     next(new AppError("FORBIDDEN", 403, "Tenant claim is required."));
     return;
   }
@@ -48,6 +49,11 @@ export function requireTenantParam(paramName = "tenantId") {
     }
 
     if (request.ctx.tenantId !== pathTenantId) {
+      request.log.warn("auth.denied", {
+        reason: "cross_tenant_access",
+        targetTenantId: pathTenantId,
+        uid: request.ctx.uid,
+      });
       next(new AppError("FORBIDDEN", 403, "Tenant access is forbidden."));
       return;
     }

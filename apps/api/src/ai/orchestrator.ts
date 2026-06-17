@@ -17,6 +17,7 @@ import {
   TenantRepository,
   type RepositoryDocument,
 } from "../repositories";
+import { logError, logInfo, metrics } from "../observability";
 import type { DomainServices } from "../services";
 import { AppError } from "../utils";
 
@@ -112,6 +113,7 @@ export class AiOrchestrator {
   }
 
   async runTurn(input: RunAiTurnInput): Promise<RunAiTurnResult> {
+    const startedAt = Date.now();
     const conversation = await this.conversations.getById(input.tenantId, input.conversationId);
 
     if (!conversation) {
@@ -199,52 +201,63 @@ export class AiOrchestrator {
     const toolExecutions: ToolExecutionRecord[] = [];
     let finalReply = "";
 
-    for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
-      const response = await this.options.client.createChatCompletion({
-        model: this.options.model ?? process.env.OPENAI_MODEL ?? "gpt-4.1-mini",
-        messages,
-        tools: aiToolDefinitions,
-        temperature: 0.3,
-        maxTokens: 500,
-      });
-      const assistantMessage = response.message;
+    try {
+      for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
+        const response = await this.options.client.createChatCompletion({
+          model: this.options.model ?? process.env.OPENAI_MODEL ?? "gpt-4.1-mini",
+          messages,
+          tools: aiToolDefinitions,
+          temperature: 0.3,
+          maxTokens: 500,
+        });
+        const assistantMessage = response.message;
 
-      messages.push(assistantMessage);
+        messages.push(assistantMessage);
 
-      if (!assistantMessage.toolCalls || assistantMessage.toolCalls.length === 0) {
-        finalReply = assistantMessage.content;
-        break;
-      }
-
-      for (const toolCall of assistantMessage.toolCalls) {
-        const handler = handlers[toolCall.name];
-
-        if (!handler) {
-          throw new AppError("VALIDATION_ERROR", 400, `Unknown AI tool: ${toolCall.name}`);
+        if (!assistantMessage.toolCalls || assistantMessage.toolCalls.length === 0) {
+          finalReply = assistantMessage.content;
+          break;
         }
 
-        const result = await handler(toolCall.argumentsJson);
+        for (const toolCall of assistantMessage.toolCalls) {
+          const handler = handlers[toolCall.name];
 
-        toolExecutions.push({ name: toolCall.name, ok: result.ok });
-        mutableConversation.data.context = {
-          ...mutableConversation.data.context,
-          ...(result.contextPatch ?? {}),
-        };
-        mutableConversation.data.state = applyTransition(
-          mutableConversation.data.state,
-          result.state,
-        );
-        mutableConversation.data.needsHuman =
-          result.needsHuman ?? mutableConversation.data.needsHuman;
-        mutableConversation.data.aiPaused = result.aiPaused ?? mutableConversation.data.aiPaused;
+          if (!handler) {
+            throw new AppError("VALIDATION_ERROR", 400, `Unknown AI tool: ${toolCall.name}`);
+          }
 
-        messages.push({
-          role: "tool",
-          toolCallId: toolCall.id,
-          name: toolCall.name,
-          content: JSON.stringify(result.content),
-        });
+          const result = await handler(toolCall.argumentsJson);
+
+          toolExecutions.push({ name: toolCall.name, ok: result.ok });
+          mutableConversation.data.context = {
+            ...mutableConversation.data.context,
+            ...(result.contextPatch ?? {}),
+          };
+          mutableConversation.data.state = applyTransition(
+            mutableConversation.data.state,
+            result.state,
+          );
+          mutableConversation.data.needsHuman =
+            result.needsHuman ?? mutableConversation.data.needsHuman;
+          mutableConversation.data.aiPaused = result.aiPaused ?? mutableConversation.data.aiPaused;
+
+          messages.push({
+            role: "tool",
+            toolCallId: toolCall.id,
+            name: toolCall.name,
+            content: JSON.stringify(result.content),
+          });
+        }
       }
+    } catch (error) {
+      metrics.incrementAiError();
+      logError("ai.turn", {
+        conversationId: input.conversationId,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        latencyMs: Date.now() - startedAt,
+        tenantId: input.tenantId,
+      });
+      throw error;
     }
 
     if (!finalReply) {
@@ -260,6 +273,14 @@ export class AiOrchestrator {
       summary: mutableConversation.data.summary,
       needsHuman: mutableConversation.data.needsHuman,
       aiPaused: mutableConversation.data.aiPaused,
+    });
+    logInfo("ai.turn", {
+      conversationId: input.conversationId,
+      latencyMs: Date.now() - startedAt,
+      state: mutableConversation.data.state,
+      tenantId: input.tenantId,
+      toolCalls: toolExecutions.map((tool) => tool.name),
+      tokens: null,
     });
 
     return {

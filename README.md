@@ -142,6 +142,8 @@ Prompt 14 adds observability: pino structured logs with `requestId`/`tenantId`, 
 
 Prompt 15 adds hardening: per-IP and per-tenant rate limits with `RATE_LIMITED` error envelopes, awaited audit log writes for staff mutations, platform-admin tenant onboarding endpoints and dashboard UI, seeded `clinic_b` data, tenant-isolation tests, short-TTL settings/phone mapping caches, paginated high-volume lists, and webhook idempotency TTL fields.
 
+Prompt 16 adds CI/CD and deployment operations: PR validation through GitHub Actions, Firebase-emulator-backed test execution, main-branch deployment to Vercel, Railway, and Firebase Firestore config, post-deploy smoke tests, Railway runtime config, and this staging/production promotion runbook.
+
 ## Hardening And Multi-Tenant Operations
 
 Tune API rate limits with `PUBLIC_RATE_LIMIT_WINDOW_MS`, `PUBLIC_RATE_LIMIT_MAX`, `TENANT_RATE_LIMIT_WINDOW_MS`, and `TENANT_RATE_LIMIT_MAX`. A limited request returns HTTP 429, `Retry-After`, and a standard `RATE_LIMITED` envelope.
@@ -191,3 +193,121 @@ https://<ngrok-host>/api/webhooks/whatsapp
 ```
 
 Use `WHATSAPP_VERIFY_TOKEN` as the Meta verify token and set `WHATSAPP_APP_SECRET` locally so POST signatures can be verified. Seed or create a tenant whose `whatsapp.phoneNumberId` matches the inbound payload `metadata.phone_number_id`.
+
+## CI/CD And Deployment
+
+GitHub Actions:
+
+- `.github/workflows/ci.yml` runs on pull requests to `main`: install, typecheck, lint, then `firebase emulators:exec --only firestore,auth "pnpm --filter api seed && pnpm test"`.
+- `.github/workflows/deploy.yml` runs on pushes to `main` for `staging` and can be manually dispatched for `staging` or `production`.
+- Configure branch protection on `main` to require the `Typecheck, lint, emulator tests` status before merge.
+
+GitHub environments:
+
+- Create `staging` and `production` environments in GitHub.
+- Add required reviewers for `production`.
+- Store secrets only in GitHub/Vercel/Railway/Firebase, never in the repo.
+
+Required GitHub environment secrets:
+
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`
+- `VERCEL_TOKEN`
+- `RAILWAY_TOKEN`
+- `RAILWAY_API_SERVICE`
+- `FIREBASE_PROJECT_ID`
+- `FIREBASE_SERVICE_ACCOUNT_JSON`
+- `SMOKE_API_BASE_URL`
+- `SMOKE_AUTH_TOKEN`
+
+`SMOKE_AUTH_TOKEN` must be a Firebase ID token for a non-production smoke-test user with valid `tenantId` and `role` custom claims. The smoke test calls `/api/health` and `/api/me`; override `SMOKE_AUTH_PATH` only if the minimal authenticated path changes.
+
+### Vercel
+
+Create separate Vercel projects or environments for staging and production. Set the project root to this repo and configure the web app build from `apps/web`; the workflow uses Vercel CLI with `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, and `VERCEL_TOKEN`.
+
+Required Vercel environment variables:
+
+- `NEXT_PUBLIC_API_BASE_URL`
+- `NEXT_PUBLIC_FIREBASE_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `NEXT_PUBLIC_FIREBASE_APP_ID`
+- `NEXT_PUBLIC_APP_RELEASE`
+- `NEXT_PUBLIC_SENTRY_DSN`
+- `NEXT_PUBLIC_SENTRY_ENVIRONMENT`
+- `NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE`
+
+### Railway
+
+Create a Railway service for the API. The committed `railway.json` builds the API with `pnpm --filter api build` and starts it with `pnpm --filter api start`. The current worker is in-process with the API queue; if a dedicated worker process is split out later, add a second Railway service with the same env and a worker start command.
+
+Required Railway environment variables:
+
+- `NODE_ENV=production`
+- `PORT`
+- `APP_BASE_URL`
+- `ALLOWED_ORIGIN`
+- `FIREBASE_PROJECT_ID`
+- `FIREBASE_CLIENT_EMAIL`
+- `FIREBASE_PRIVATE_KEY`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `WHATSAPP_VERIFY_TOKEN`
+- `WHATSAPP_APP_SECRET`
+- `WHATSAPP_GRAPH_VERSION`
+- `WHATSAPP_ACCESS_TOKEN`
+- `WHATSAPP_CONFIRMATION_TEMPLATE_NAME`
+- `WHATSAPP_TEMPLATE_LANGUAGE`
+- `APP_RELEASE`
+- `LOG_LEVEL`
+- `SENTRY_DSN`
+- `SENTRY_ENVIRONMENT`
+- `SENTRY_TRACES_SAMPLE_RATE`
+- `PUBLIC_RATE_LIMIT_WINDOW_MS`
+- `PUBLIC_RATE_LIMIT_MAX`
+- `TENANT_RATE_LIMIT_WINDOW_MS`
+- `TENANT_RATE_LIMIT_MAX`
+
+### Firebase
+
+Create separate Firebase projects for staging and production. Enable Firestore and Firebase Auth. The deployment workflow publishes `firestore.rules` and `firestore.indexes.json` using `FIREBASE_SERVICE_ACCOUNT_JSON`.
+
+For local emulator checks:
+
+```bash
+pnpm dlx firebase-tools@latest emulators:exec --project clinic-ai-local --only firestore,auth "pnpm --filter api seed && pnpm test"
+```
+
+### WhatsApp Webhook Configuration
+
+For staging, use the Meta test WhatsApp number and callback:
+
+```text
+https://<staging-api-host>/api/webhooks/whatsapp
+```
+
+For production, use the approved business number and callback:
+
+```text
+https://<production-api-host>/api/webhooks/whatsapp
+```
+
+In Meta App Dashboard, set the verify token to the exact `WHATSAPP_VERIFY_TOKEN` configured on Railway for that environment. Subscribe to message and status webhook fields. Set `WHATSAPP_APP_SECRET` on Railway so POST callbacks validate `X-Hub-Signature-256`. Each tenant's `whatsapp.phoneNumberId` in Firestore must match the incoming `metadata.phone_number_id`.
+
+### OpenAI And WhatsApp Wiring
+
+Set `OPENAI_API_KEY` and `OPENAI_MODEL` on Railway only. Set WhatsApp Graph API credentials on Railway only: `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_GRAPH_VERSION`, `WHATSAPP_CONFIRMATION_TEMPLATE_NAME`, and `WHATSAPP_TEMPLATE_LANGUAGE`. Do not expose these values to Vercel or any `NEXT_PUBLIC_*` variable.
+
+### Production Promotion Runbook
+
+1. Merge to `main` and confirm the staging deploy workflow passes.
+2. Confirm `/api/health`, `/api/health/ready`, and the smoke authenticated path pass against staging.
+3. In staging, verify the WhatsApp webhook with the Meta test number and send a booking test through confirmation.
+4. Confirm Firestore rules/indexes are deployed to staging and tenant isolation smoke checks pass.
+5. Confirm Sentry events include release, role, tenant, and request tags.
+6. Dispatch the `Deploy` workflow manually with `environment=production`.
+7. Confirm production smoke tests pass and uptime monitoring is green.
+8. If smoke tests fail, roll back the Vercel deployment, redeploy the previous Railway service version, and redeploy the last known-good Firestore rules/indexes from git.

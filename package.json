@@ -12,6 +12,7 @@
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
+    "smoke:deployment": "node scripts/deployment-smoke-test.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

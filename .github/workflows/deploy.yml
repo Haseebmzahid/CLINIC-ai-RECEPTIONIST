@@ -1,0 +1,146 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+
+env:
+  TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+
+jobs:
+  deploy-web:
+    name: Deploy web to Vercel
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and deploy
+        shell: bash
+        run: |
+          if [ "$TARGET_ENV" = "production" ]; then
+            vercel_environment="production"
+            deploy_args="--prod"
+          else
+            vercel_environment="preview"
+            deploy_args=""
+          fi
+
+          pnpm dlx vercel@latest pull --yes --environment="$vercel_environment" --token="$VERCEL_TOKEN"
+          pnpm dlx vercel@latest build $deploy_args --token="$VERCEL_TOKEN"
+          pnpm dlx vercel@latest deploy --prebuilt $deploy_args --token="$VERCEL_TOKEN"
+
+  deploy-api:
+    name: Deploy API and worker to Railway
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_API_SERVICE: ${{ secrets.RAILWAY_API_SERVICE }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Deploy Railway service
+        run: pnpm dlx @railway/cli@latest up --service "$RAILWAY_API_SERVICE" --detach
+
+  deploy-firebase:
+    name: Deploy Firestore rules and indexes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+    env:
+      FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+
+      - name: Deploy Firestore config
+        run: >
+          npx --yes firebase-tools@latest deploy
+          --only firestore:rules,firestore:indexes
+          --project "$FIREBASE_PROJECT_ID"
+          --non-interactive
+
+  smoke:
+    name: Post-deploy smoke tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+    needs:
+      - deploy-web
+      - deploy-api
+      - deploy-firebase
+    env:
+      SMOKE_API_BASE_URL: ${{ secrets.SMOKE_API_BASE_URL }}
+      SMOKE_AUTH_TOKEN: ${{ secrets.SMOKE_AUTH_TOKEN }}
+      SMOKE_AUTH_PATH: /api/me
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run smoke tests
+        run: node scripts/deployment-smoke-test.mjs

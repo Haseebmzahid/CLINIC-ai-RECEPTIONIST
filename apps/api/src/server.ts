@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type Express } from "express";
 import helmet from "helmet";
 
 import { getDb } from "./integrations/firebase";
@@ -26,7 +26,7 @@ export interface ServerOptions {
   whatsappVerifyToken?: string;
 }
 
-export function createServer(options: ServerOptions = {}) {
+export function createServer(options: ServerOptions = {}): Express {
   initSentry();
 
   const app = express();

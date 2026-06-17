@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Router as ExpressRouter } from "express";
 
 import {
   getHealth,
@@ -7,7 +7,7 @@ import {
   getSentryTest,
 } from "../controllers/health.controller";
 
-export const healthRouter = Router();
+export const healthRouter: ExpressRouter = Router();
 
 healthRouter.get("/", getHealth);
 healthRouter.get("/ready", getReadiness);

@@ -31,7 +31,10 @@ export function createServer(options: ServerOptions = {}): Express {
   initSentry();
 
   const app = express();
-  const allowedOrigin = process.env.ALLOWED_ORIGIN ?? "http://localhost:3000";
+  const allowedOrigins = (process.env.ALLOWED_ORIGIN ?? "http://localhost:3000")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
   const getServices = createLazyDomainServicesProvider();
   let whatsappQueue = options.whatsappQueue;
   let whatsappStatusProcessor = options.whatsappStatusProcessor;
@@ -47,7 +50,7 @@ export function createServer(options: ServerOptions = {}): Express {
   app.use(requestContext);
   app.use(
     cors({
-      origin: allowedOrigin,
+      origin: allowedOrigins,
       credentials: true,
     }),
   );

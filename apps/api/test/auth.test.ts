@@ -112,6 +112,29 @@ describe("auth middleware", () => {
     expect(response.header["access-control-allow-origin"]).toBe("http://localhost:3000");
   });
 
+  it("allows configured LAN dashboard origins to GET /api/me", async () => {
+    const originalAllowedOrigin = process.env.ALLOWED_ORIGIN;
+
+    process.env.ALLOWED_ORIGIN =
+      "http://localhost:3000,http://127.0.0.1:3000,http://192.168.56.1:3000";
+
+    try {
+      const response = await request(createServer({ tokenVerifier }))
+        .get("/api/me")
+        .set("Origin", "http://192.168.56.1:3000")
+        .set("Authorization", "Bearer valid_clinic_a_staff");
+
+      expect(response.status).toBe(200);
+      expect(response.header["access-control-allow-origin"]).toBe("http://192.168.56.1:3000");
+    } finally {
+      if (originalAllowedOrigin === undefined) {
+        delete process.env.ALLOWED_ORIGIN;
+      } else {
+        process.env.ALLOWED_ORIGIN = originalAllowedOrigin;
+      }
+    }
+  });
+
   it("returns 401 for a missing token", async () => {
     const response = await request(createServer({ tokenVerifier })).get("/api/me");
 

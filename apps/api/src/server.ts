@@ -1,4 +1,5 @@
 import express, { type Express } from "express";
+import cors from "cors";
 import helmet from "helmet";
 
 import { getDb } from "./integrations/firebase";
@@ -30,6 +31,7 @@ export function createServer(options: ServerOptions = {}): Express {
   initSentry();
 
   const app = express();
+  const allowedOrigin = process.env.ALLOWED_ORIGIN ?? "http://localhost:3000";
   const getServices = createLazyDomainServicesProvider();
   let whatsappQueue = options.whatsappQueue;
   let whatsappStatusProcessor = options.whatsappStatusProcessor;
@@ -43,6 +45,12 @@ export function createServer(options: ServerOptions = {}): Express {
   };
 
   app.use(requestContext);
+  app.use(
+    cors({
+      origin: allowedOrigin,
+      credentials: true,
+    }),
+  );
   app.use(helmet());
   app.use(
     express.json({

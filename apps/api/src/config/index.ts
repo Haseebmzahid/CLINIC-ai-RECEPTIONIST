@@ -1,3 +1,3 @@
 export const apiConfig = {
-  port: Number(process.env.PORT ?? 4000),
+  port: Number(process.env.PORT ?? 3001),
 };

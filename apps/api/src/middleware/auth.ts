@@ -31,6 +31,14 @@ function extractBearerToken(request: Request): string {
   return token;
 }
 
+function tokenPreview(token: string): string {
+  if (token.length <= 12) {
+    return `${token.slice(0, 4)}...`;
+  }
+
+  return `${token.slice(0, 6)}...${token.slice(-4)}`;
+}
+
 export function requireAuth(verifier?: TokenVerifier) {
   return (request: Request, _response: Response, next: NextFunction): void => {
     void (async () => {
@@ -40,6 +48,10 @@ export function requireAuth(verifier?: TokenVerifier) {
         const decoded = await activeVerifier.verifyIdToken(token);
         const claims = ClaimsSchema.parse(decoded);
 
+        request.authDebug = {
+          tokenLength: token.length,
+          tokenPreview: tokenPreview(token),
+        };
         request.auth = {
           uid: claims.uid,
           role: claims.role,

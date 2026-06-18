@@ -102,6 +102,16 @@ describe("auth middleware", () => {
     });
   });
 
+  it("allows dashboard origin requests to GET /api/me", async () => {
+    const response = await request(createServer({ tokenVerifier }))
+      .get("/api/me")
+      .set("Origin", "http://localhost:3000")
+      .set("Authorization", "Bearer valid_clinic_a_staff");
+
+    expect(response.status).toBe(200);
+    expect(response.header["access-control-allow-origin"]).toBe("http://localhost:3000");
+  });
+
   it("returns 401 for a missing token", async () => {
     const response = await request(createServer({ tokenVerifier })).get("/api/me");
 

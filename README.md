@@ -33,10 +33,10 @@ API:
 pnpm --filter api dev
 ```
 
-The API listens on `http://localhost:4000` and exposes:
+The API listens on `http://localhost:3001` and exposes:
 
 ```bash
-curl http://localhost:4000/api/health
+curl http://localhost:3001/api/health
 ```
 
 Web:
@@ -183,7 +183,7 @@ Run the API locally and expose it with ngrok:
 
 ```bash
 pnpm --filter api dev
-ngrok http 4000
+ngrok http 3001
 ```
 
 Configure the Meta webhook callback URL to:

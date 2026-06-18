@@ -8,7 +8,7 @@ config({ path: resolve(currentDir, "../.env.local") });
 
 const { createServer } = await import("./server");
 
-const port = Number(process.env.PORT ?? 4000);
+const port = Number(process.env.PORT ?? 3001);
 const app = createServer();
 
 app.listen(port, () => {

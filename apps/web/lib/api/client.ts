@@ -269,7 +269,7 @@ export class ApiClientError extends Error {
   }
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 function isE2eApiMock(): boolean {
   if (process.env.NEXT_PUBLIC_E2E_API_MOCK === "true") {
     return true;

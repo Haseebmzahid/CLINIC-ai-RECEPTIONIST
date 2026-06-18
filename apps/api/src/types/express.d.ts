@@ -22,6 +22,11 @@ export interface RequestContext {
   requestId: string;
 }
 
+export interface AuthDebugContext {
+  tokenLength: number;
+  tokenPreview: string;
+}
+
 declare global {
   namespace Express {
     interface Request {
@@ -29,6 +34,7 @@ declare global {
       log: RequestLogger;
       rawBody?: Buffer;
       auth?: VerifiedAuthClaims;
+      authDebug?: AuthDebugContext;
       ctx?: RequestContext;
     }
   }

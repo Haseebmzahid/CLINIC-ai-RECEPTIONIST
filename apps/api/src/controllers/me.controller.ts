@@ -12,6 +12,15 @@ export function getMe(request: Request, response: Response): void {
     return;
   }
 
+  request.log.info("auth.me", {
+    claims: {
+      uid: request.ctx.uid,
+      role: request.ctx.role,
+      tenantId: request.ctx.tenantId,
+    },
+    authToken: request.authDebug,
+  });
+
   response.status(200).json({
     uid: request.ctx.uid,
     role: request.ctx.role,

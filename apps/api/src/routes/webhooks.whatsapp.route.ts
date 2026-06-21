@@ -37,7 +37,7 @@ export function createWhatsAppWebhookRouter(options: WhatsAppWebhookRouterOption
         query["hub.verify_token"] &&
         query["hub.verify_token"] === options.verifyToken
       ) {
-        response.status(200).send(query["hub.challenge"] ?? "");
+        response.status(200).type("text/plain").send(query["hub.challenge"] ?? "");
         return;
       }
 
